@@ -21,7 +21,7 @@ namespace FOMSApp.API.Models
         public int VaultId { get; set; }
 
         // Vault: The Navigation Property. It allows easy access to the parent Vault object from this photo.
-        public Vault? Vault { get; set; }
+        public Vault? Vault { get; set; } //refers to the parent Vault object. ? means it can be null.
     }
 }
 // Relationship summary: One Vault can have many ConstructionPhotos. 
