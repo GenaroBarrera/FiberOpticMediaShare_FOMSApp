@@ -14,7 +14,7 @@ namespace FOMSApp.API.Models
         
         // Native SQL Geography type
         // The most important field. It uses the Point type (from NetTopologySuite) to store the exact Latitude and Longitude. This is what allows us to plot it on a map.
-        public Point Location { get; set; } 
+        public required Point Location { get; set; } // Using 'required' to ensure this property is set during object initialization.
 
         // Status: Stores the current state (from the list in VaultStatus).
         public VaultStatus Status { get; set; } = VaultStatus.Pending; 
