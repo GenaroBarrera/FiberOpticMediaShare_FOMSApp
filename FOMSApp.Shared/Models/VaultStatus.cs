@@ -1,4 +1,4 @@
-namespace FOMSApp.API.Models
+namespace FOMSApp.Shared.Models
 {
     // (The Workflow)
     // This is an Enumeration (Enum). It doesn't create a table; it creates a strict list of allowed "states" that a

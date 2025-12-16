@@ -1,6 +1,6 @@
 using NetTopologySuite.Geometries; //This is required to use the Point type for Location
 
-namespace FOMSApp.API.Models
+namespace FOMSApp.Shared.Models
 {
     // (The Parent Entity)
     // This class represents the physical object (vault) in the ground. It is the "Parent" because it owns the photos.

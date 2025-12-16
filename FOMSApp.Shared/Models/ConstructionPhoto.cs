@@ -1,4 +1,4 @@
-namespace FOMSApp.API.Models
+namespace FOMSApp.Shared.Models
 {
     // (The Child Entity)
     // This represents a single image uploaded by a field crew member.
