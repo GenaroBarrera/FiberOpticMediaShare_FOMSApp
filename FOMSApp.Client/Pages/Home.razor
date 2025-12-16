@@ -1,6 +1,8 @@
 ﻿@page "/"
 @using FOMSApp.Shared.Models
 @using Microsoft.JSInterop
+@using System.Text.Json
+@using NetTopologySuite.IO.Converters
 @inject HttpClient Http
 @inject IJSRuntime JS
 
@@ -11,6 +13,7 @@
 @if (vaults == null)
 {
     <p><em>Loading network data...</em></p>
+    <p style="font-size: small; color: gray;">(If this takes too long, check the Console (F12) for errors)</p>
 }
 else
 {
@@ -24,14 +27,19 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        // 1. Fetch data from API
         try 
         {
-            vaults = await Http.GetFromJsonAsync<Vault[]>("api/vaults");
+            // 1. Configure the JSON Serializer to understand GeoJSON
+            // Without this, the app crashes when it sees "Point" data
+            var options = new JsonSerializerOptions(); 
+            options.Converters.Add(new GeoJsonConverterFactory()); // Add GeoJSON support
+
+            // 2. Fetch data using those specific options
+            vaults = await Http.GetFromJsonAsync<Vault[]>("api/vaults", options);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error fetching data: {ex.Message}");
+            Console.WriteLine($"CRITICAL ERROR FETCHING DATA: {ex.Message}");
         }
     }
 
@@ -39,24 +47,31 @@ else
     {
         if (firstRender && vaults != null)
         {
-            // 2. Import the JS Helper we wrote
-            module = await JS.InvokeAsync<IJSObjectReference>("import", "./mapHelper.js");
-
-            // 3. Initialize the Map
-            mapInstance = await module.InvokeAsync<IJSObjectReference>("initMap", "map");
-
-            // 4. Loop through Vaults and add Markers
-            foreach (var vault in vaults)
+            try 
             {
-                // Note: The API sends coordinates as [Longitude, Latitude] (X, Y)
-                // Leaflet expects [Latitude, Longitude] (Y, X)
-                if (vault.Location != null)
-                {
-                    double lat = vault.Location.Coordinates[1].Y;
-                    double lng = vault.Location.Coordinates[0].X;
+                // 3. Import the JS Helper
+                module = await JS.InvokeAsync<IJSObjectReference>("import", "./mapHelper.js");
 
-                    await module.InvokeVoidAsync("addMarker", mapInstance, lat, lng, $"<b>{vault.Name}</b><br>{vault.Status}");
+                // 4. Initialize the Map
+                mapInstance = await module.InvokeAsync<IJSObjectReference>("initMap", "map");
+
+                // 5. Loop through Vaults and add Markers
+                foreach (var vault in vaults)
+                {
+                    if (vault.Location != null)
+                    {
+                        // Note: NetTopologySuite coordinates are [X, Y] (Longitude, Latitude)
+                        // Leaflet needs [Latitude, Longitude]
+                        double lat = vault.Location.Coordinates[1].Y;
+                        double lng = vault.Location.Coordinates[0].X;
+
+                        await module.InvokeVoidAsync("addMarker", mapInstance, lat, lng, $"<b>{vault.Name}</b><br>{vault.Status}");
+                    }
                 }
+            }
+            catch(Exception ex)
+            {
+                Console.WriteLine($"MAP RENDERING ERROR: {ex.Message}");
             }
         }
     }
