@@ -1,6 +1,6 @@
 using NetTopologySuite;
 using NetTopologySuite.Geometries;
-using FOMSApp.API.Models;
+using FOMSApp.Shared.Models;
 
 namespace FOMSApp.API.Data
 {

@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using FOMSApp.API.Data;
-using FOMSApp.API.Models;
+using FOMSApp.Shared.Models;
 
 namespace FOMSApp.API.Controllers
 {

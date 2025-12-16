@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore; // EF Core namespace for DbContext and related classes
-using FOMSApp.API.Models; // Namespace where Vault and ConstructionPhoto classes are defined
+using FOMSApp.Shared.Models; // Namespace where Vault and ConstructionPhoto classes are defined
 
 namespace FOMSApp.API.Data
 {
