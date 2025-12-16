@@ -66,7 +66,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection(); // Disabled for simplicity in local dev
 
 // IMPORTANT: CORS must be before Authorization
 app.UseCors("AllowAll");

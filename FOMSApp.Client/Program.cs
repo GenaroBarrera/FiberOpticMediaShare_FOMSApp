@@ -10,6 +10,6 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 // POINT THIS TO YOUR API
 // ==========================================
 // Make sure this port matches what your API terminal says (likely 5083)
-builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri("http://localhost:5083") });
+builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri("http://localhost:5083") }); // Ensure both use HTTP since we disabled HTTPS in API
 
 await builder.Build().RunAsync();
