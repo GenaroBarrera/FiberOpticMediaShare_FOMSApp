@@ -1,7 +1,63 @@
 ﻿@page "/"
+@using FOMSApp.Shared.Models
+@using Microsoft.JSInterop
+@inject HttpClient Http
+@inject IJSRuntime JS
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Fiber Map</PageTitle>
 
-<h1>Hello, world!</h1>
+<h1>Fiber Network Map</h1>
 
-Welcome to your new app.
+@if (vaults == null)
+{
+    <p><em>Loading network data...</em></p>
+}
+else
+{
+    <div id="map" style="height: 600px; width: 100%;"></div>
+}
+
+@code {
+    private Vault[]? vaults;
+    private IJSObjectReference? module;
+    private IJSObjectReference? mapInstance;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // 1. Fetch data from API
+        try 
+        {
+            vaults = await Http.GetFromJsonAsync<Vault[]>("api/vaults");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error fetching data: {ex.Message}");
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && vaults != null)
+        {
+            // 2. Import the JS Helper we wrote
+            module = await JS.InvokeAsync<IJSObjectReference>("import", "./mapHelper.js");
+
+            // 3. Initialize the Map
+            mapInstance = await module.InvokeAsync<IJSObjectReference>("initMap", "map");
+
+            // 4. Loop through Vaults and add Markers
+            foreach (var vault in vaults)
+            {
+                // Note: The API sends coordinates as [Longitude, Latitude] (X, Y)
+                // Leaflet expects [Latitude, Longitude] (Y, X)
+                if (vault.Location != null)
+                {
+                    double lat = vault.Location.Coordinates[1].Y;
+                    double lng = vault.Location.Coordinates[0].X;
+
+                    await module.InvokeVoidAsync("addMarker", mapInstance, lat, lng, $"<b>{vault.Name}</b><br>{vault.Status}");
+                }
+            }
+        }
+    }
+}
