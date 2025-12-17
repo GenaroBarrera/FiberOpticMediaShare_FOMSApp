@@ -72,7 +72,10 @@ else
                         double lat = vault.Location.Y; // Latitude
                         double lng = vault.Location.X; // Longitude
 
-                        await module.InvokeVoidAsync("addMarker", mapInstance, lat, lng, $"<b>{vault.Name}</b><br>{vault.Status}");
+                        // We add an HTML <a> tag that links to '/vault/{id}'
+                        string popupHtml = $"<b>{vault.Name}</b><br>{vault.Status}<br><a href='vault/{vault.Id}'>View Details</a>";
+
+                        await module.InvokeVoidAsync("addMarker", mapInstance, lat, lng, popupHtml);
                     }
                 }
             }
