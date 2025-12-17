@@ -17,7 +17,7 @@ namespace FOMSApp.API.Controllers
         }
 
         // GET: api/Vaults
-        [HttpGet]
+        [HttpGet] 
         public async Task<ActionResult<IEnumerable<Vault>>> GetVaults()
         {
             // We use .Include to fetch the Photos along with the Vault
@@ -26,13 +26,11 @@ namespace FOMSApp.API.Controllers
                 .ToListAsync();
         }
 
-        // GET: api/Vaults/5
+        // GET: api/vaults/5
         [HttpGet("{id}")]
         public async Task<ActionResult<Vault>> GetVault(int id)
         {
-            var vault = await _context.Vaults
-                .Include(v => v.Photos)
-                .FirstOrDefaultAsync(v => v.Id == id);
+            var vault = await _context.Vaults.FindAsync(id);
 
             if (vault == null)
             {
