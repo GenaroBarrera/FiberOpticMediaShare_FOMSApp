@@ -29,12 +29,17 @@ else
     {
         try 
         {
-            // 1. Configure the JSON Serializer to understand GeoJSON
-            // Without this, the app crashes when it sees "Point" data
-            var options = new JsonSerializerOptions(); 
-            options.Converters.Add(new GeoJsonConverterFactory()); // Add GeoJSON support
+            // FIX: We must enable 'PropertyNameCaseInsensitive' 
+            // This allows the lowercase 'location' from the API to match the uppercase 'Location' in your C# Model.
+            var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true 
+            };
+            
+            // Add the GeoJSON converter so it understands Point data
+            options.Converters.Add(new GeoJsonConverterFactory());
 
-            // 2. Fetch data using those specific options
+            // Fetch data using the specific options
             vaults = await Http.GetFromJsonAsync<Vault[]>("api/vaults", options);
         }
         catch (Exception ex)
@@ -45,25 +50,27 @@ else
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && vaults != null)
+        // LOGIC: Check if we have data (vaults) AND the map hasn't been created yet (mapInstance)
+        // This ensures the map draws the moment the data arrives from the API.
+        if (vaults != null && mapInstance == null)
         {
             try 
             {
-                // 3. Import the JS Helper
+                // 1. Import the JS Helper
                 module = await JS.InvokeAsync<IJSObjectReference>("import", "./mapHelper.js");
 
-                // 4. Initialize the Map
+                // 2. Initialize the Map
                 mapInstance = await module.InvokeAsync<IJSObjectReference>("initMap", "map");
 
-                // 5. Loop through Vaults and add Markers
+                // 3. Loop through Vaults and add Markers
                 foreach (var vault in vaults)
                 {
                     if (vault.Location != null)
                     {
-                        // Note: NetTopologySuite coordinates are [X, Y] (Longitude, Latitude)
-                        // Leaflet needs [Latitude, Longitude]
-                        double lat = vault.Location.Coordinates[1].Y;
-                        double lng = vault.Location.Coordinates[0].X;
+                        // FIX: Access X and Y directly from the Point object.
+                        // Do not use Coordinates[1] or Coordinates[0].
+                        double lat = vault.Location.Y; // Latitude
+                        double lng = vault.Location.X; // Longitude
 
                         await module.InvokeVoidAsync("addMarker", mapInstance, lat, lng, $"<b>{vault.Name}</b><br>{vault.Status}");
                     }
