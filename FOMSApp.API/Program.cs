@@ -68,6 +68,8 @@ if (app.Environment.IsDevelopment())
 
 //app.UseHttpsRedirection(); // Disabled for simplicity in local dev
 
+app.UseStaticFiles(); // <--- This allows the API to serve images from the wwwroot folder
+
 // IMPORTANT: CORS must be before Authorization
 app.UseCors("AllowAll");
 
