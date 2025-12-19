@@ -28,8 +28,12 @@ builder.Services.AddCors(options =>
 
 // C. Register Controllers with GeoJSON Support
 builder.Services.AddControllers()
-    .AddJsonOptions(options => 
+    .AddJsonOptions(options =>
     {
+        // This prevents the "Cycle" error (infinite loops in data)
+        options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+
+        // This teaches Swagger how to read Points and Lines
         options.JsonSerializerOptions.Converters.Add(new GeoJsonConverterFactory());
     });
 
