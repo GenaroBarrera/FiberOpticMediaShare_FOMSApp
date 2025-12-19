@@ -10,7 +10,7 @@
 
 <h1>Fiber Network Map</h1>
 
-@if (vaults == null)
+@if (vaults == null || midpoints == null)
 {
     <p><em>Loading network data...</em></p>
     <p style="font-size: small; color: gray;">(If this takes too long, check the Console (F12) for errors)</p>
@@ -22,6 +22,8 @@ else
 
 @code {
     private Vault[]? vaults;
+    private Midpoint[]? midpoints; // <--- New List for Midpoints
+    
     private IJSObjectReference? module;
     private IJSObjectReference? mapInstance;
 
@@ -29,18 +31,18 @@ else
     {
         try 
         {
-            // FIX: We must enable 'PropertyNameCaseInsensitive' 
-            // This allows the lowercase 'location' from the API to match the uppercase 'Location' in your C# Model.
+            // 1. Configure Serializer (Case Insensitive + GeoJSON)
             var options = new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true 
             };
-            
-            // Add the GeoJSON converter so it understands Point data
             options.Converters.Add(new GeoJsonConverterFactory());
 
-            // Fetch data using the specific options
+            // 2. Fetch Vaults
             vaults = await Http.GetFromJsonAsync<Vault[]>("api/vaults", options);
+
+            // 3. Fetch Midpoints (NEW)
+            midpoints = await Http.GetFromJsonAsync<Midpoint[]>("api/midpoints", options);
         }
         catch (Exception ex)
         {
@@ -50,9 +52,8 @@ else
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        // LOGIC: Check if we have data (vaults) AND the map hasn't been created yet (mapInstance)
-        // This ensures the map draws the moment the data arrives from the API.
-        if (vaults != null && mapInstance == null)
+        // LOGIC: Ensure data exists (vaults & midpoints) AND map is not yet created
+        if (vaults != null && midpoints != null && mapInstance == null)
         {
             try 
             {
@@ -62,20 +63,33 @@ else
                 // 2. Initialize the Map
                 mapInstance = await module.InvokeAsync<IJSObjectReference>("initMap", "map");
 
-                // 3. Loop through Vaults and add Markers
+                // 3. Draw VAULTS (Pins)
                 foreach (var vault in vaults)
                 {
                     if (vault.Location != null)
                     {
-                        // FIX: Access X and Y directly from the Point object.
-                        // Do not use Coordinates[1] or Coordinates[0].
-                        double lat = vault.Location.Y; // Latitude
-                        double lng = vault.Location.X; // Longitude
+                        double lat = vault.Location.Y;
+                        double lng = vault.Location.X;
 
-                        // We add an HTML <a> tag that links to '/vault/{id}'
+                        // Create the "View Details" link for the popup
                         string popupHtml = $"<b>{vault.Name}</b><br>{vault.Status}<br><a href='vault/{vault.Id}'>View Details</a>";
 
+                        // Use 'addMarker' (Teardrop Icon)
                         await module.InvokeVoidAsync("addMarker", mapInstance, lat, lng, popupHtml);
+                    }
+                }
+
+                // 4. Draw MIDPOINTS (Circles) - NEW
+                foreach (var mp in midpoints)
+                {
+                    if (mp.Location != null)
+                    {
+                        double lat = mp.Location.Y;
+                        double lng = mp.Location.X;
+
+                        // Use 'addCircle' (Dot Icon)
+                        // We pass the specific color defined in the database (e.g., "red", "green")
+                        await module.InvokeVoidAsync("addCircle", mapInstance, lat, lng, mp.Color, $"<b>{mp.Name}</b>");
                     }
                 }
             }

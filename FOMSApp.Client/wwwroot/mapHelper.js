@@ -19,3 +19,19 @@ export function addMarker(map, lat, lng, popupText) {
     L.marker([lat, lng]).addTo(map)
         .bindPopup(popupText); // Add a popup to the marker
 }
+
+// Function to add a small circle marker (Dot)
+export function addCircle(map, lat, lng, color, popupText) {
+    var circleMarker = L.circleMarker([lat, lng], {
+        color: 'black',       // Border color
+        fillColor: color,     // Inside color (e.g., 'green')
+        fillOpacity: 0.8,
+        radius: 6             // Size of the dot (smaller than a pin)
+    }).addTo(map);
+
+    if (popupText) {
+        circleMarker.bindPopup(popupText);
+    }
+    
+    return circleMarker;
+}
