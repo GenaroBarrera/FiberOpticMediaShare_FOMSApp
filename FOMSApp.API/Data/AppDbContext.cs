@@ -12,7 +12,9 @@ namespace FOMSApp.API.Data
         // These properties become your Database Tables
         public DbSet<Vault> Vaults { get; set; } = null!; //Add a DbSet for Vaults.
         public DbSet<Photo> Photos { get; set; } = null!; // Add a DbSet for Photos. 
-        public DbSet<ConstructionPhoto> ConstructionPhotos { get; set; } = null!; // Add a DbSet for ConstructionPhotos.
+        public DbSet<Cable> Cables { get; set; } = null!; // Add a DbSet for Cables (Map Polylines).
+        public DbSet<Midpoint> Midpoints { get; set; } = null!; // Add a DbSet for Midpoints (Map Points along Cables).
+        public DbSet<ConstructionPhoto> ConstructionPhotos { get; set; } = null!; // Add a DbSet for ConstructionPhotos. (Am I using this model?)
         
         // OnModelCreating: In this method we tell the sql server how to treat our spatial data
         protected override void OnModelCreating(ModelBuilder modelBuilder) 

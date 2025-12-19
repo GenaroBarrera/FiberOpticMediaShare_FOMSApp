@@ -6,20 +6,16 @@ namespace FOMSApp.Shared.Models
     // This class represents the physical object (vault) in the ground. It is the "Parent" because it owns the photos.
     public class Vault
     {
-        // Id: The unique ID for the database (Primary Key).
-        public int Id { get; set; } 
+        public int Id { get; set; } // Primary Key: Unique identifier for each vault
+        public string Name { get; set; } = string.Empty; // Name of the vault (e.g., "Vault A1")
+        public string Color { get; set; } = "Blue";// Type of vault (e.g., Standard, Custom, etc.)
+        public VaultStatus Status { get; set; } = VaultStatus.Pending; // Status: Stores the current state (from the list in VaultStatus)
 
-        // Name: The label found on the engineering prints (ex "Pg.1 Vault 1").
-        public string Name { get; set; } = string.Empty; 
-        
         // Native SQL Geography type
         // The most important field. It uses the Point type (from NetTopologySuite) to store the exact Latitude and Longitude. This is what allows us to plot it on a map.
         public required Point Location { get; set; } // Using 'required' to ensure this property is set during object initialization.
-
-        // Status: Stores the current state (from the list in VaultStatus).
-        public VaultStatus Status { get; set; } = VaultStatus.Pending; 
-
-        // Photos: A list (collection) of all photos attached to this specific vault. This creates a One-to-Many relationship (One Vault has Many Photos).
-        public List<ConstructionPhoto> Photos { get; set; } = new(); 
+        
+        // Photos: A list (collection) of all photos attached to this specific vault.
+        public List<ConstructionPhoto> Photos { get; set; } = new();  //This creates a One-to-Many relationship (One Vault has Many Photos).
     }
 }
