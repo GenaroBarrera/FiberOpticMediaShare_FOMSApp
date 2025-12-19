@@ -31,35 +31,32 @@ namespace FOMSApp.API.Controllers
         // POST: api/photos
         // This receives the file and saves it
         [HttpPost]
-        public async Task<ActionResult<Photo>> UploadPhoto([FromForm] IFormFile file, [FromForm] int vaultId)
+        // POST: api/photos
+        [HttpPost]
+        public async Task<ActionResult<Photo>> UploadPhoto([FromForm] PhotoUploadDto upload)
         {
-            if (file == null || file.Length == 0)
+            // Update logic to use 'upload.File' and 'upload.VaultId'
+            if (upload.File == null || upload.File.Length == 0)
                 return BadRequest("No file uploaded.");
 
-            // 1. Create the "Uploads" folder if it doesn't exist
-            // We save inside wwwroot so the browser can access it later
             string uploadPath = Path.Combine(_env.WebRootPath, "uploads");
             if (!Directory.Exists(uploadPath))
             {
                 Directory.CreateDirectory(uploadPath);
             }
 
-            // 2. Generate a unique filename (to prevent overwrites)
-            // e.g., "b123-guid-5678.jpg"
-            string uniqueFileName = Guid.NewGuid().ToString() + Path.GetExtension(file.FileName);
+            string uniqueFileName = Guid.NewGuid().ToString() + Path.GetExtension(upload.File.FileName);
             string fullPath = Path.Combine(uploadPath, uniqueFileName);
 
-            // 3. Save the file to the hard drive
             using (var stream = new FileStream(fullPath, FileMode.Create))
             {
-                await file.CopyToAsync(stream);
+                await upload.File.CopyToAsync(stream);
             }
 
-            // 4. Save the record in the Database
             var photo = new Photo
             {
                 FileName = uniqueFileName,
-                VaultId = vaultId,
+                VaultId = upload.VaultId, // usage updated
                 UploadedAt = DateTime.Now
             };
 
@@ -69,4 +66,11 @@ namespace FOMSApp.API.Controllers
             return Ok(photo);
         }
     }
+}
+
+// Wraps the file and the ID together so Swagger is happy
+public class PhotoUploadDto
+{
+    public int VaultId { get; set; }
+    public IFormFile File { get; set; }
 }

@@ -35,3 +35,17 @@ export function addCircle(map, lat, lng, color, popupText) {
     
     return circleMarker;
 }
+
+// Function to add a polyline to the map
+export function addPolyline(map, coordinates, color, popupText) {
+    var polyline = L.polyline(coordinates, {
+        color: color,
+        weight: 4,
+        opacity: 0.8
+    }).addTo(map);
+
+    if (popupText) {
+        polyline.bindPopup(popupText);
+    }
+    return polyline;
+}
