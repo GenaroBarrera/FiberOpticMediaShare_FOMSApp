@@ -1,20 +1,48 @@
 namespace FOMSApp.Shared.Models
 {
-    // (The Workflow)
-    // This is an Enumeration (Enum). It doesn't create a table; it creates a strict list of allowed "states" that a
-    // vault can be in. It drives the color-coding on your map.
+    /// <summary>
+    /// Enumeration defining the workflow states a vault can be in during the QA process.
+    /// 
+    /// Enums provide type-safe constants - they ensure only valid status values can be assigned.
+    /// This is better than using strings because:
+    /// - Compiler catches typos (can't assign "Pennding" by mistake)
+    /// - IntelliSense shows available options
+    /// - Database stores as integer (smaller, faster than strings)
+    /// 
+    /// This enum doesn't create a database table - Entity Framework stores it as an integer column.
+    /// The numeric values (0, 1, 2, 3) are stored in the database, but you work with the names in code.
+    /// </summary>
+    /// <remarks>
+    /// The workflow progression is typically:
+    /// Pending → Review → Complete (approved) OR Rejected (needs rework)
+    /// 
+    /// Each status drives visual indicators on the map (pin colors) and determines
+    /// business logic (e.g., only Complete vaults sync to Google Drive).
+    /// </remarks>
     public enum VaultStatus
     {
-        // The default state. The vault exists on the map (Gray pin), but no work has been done yet.
-        Pending = 0,    // Gray 
+        /// <summary>
+        /// Initial state when a vault is created. No work has been done yet.
+        /// Map display: Gray pin
+        /// </summary>
+        Pending = 0,
 
-        // The field crew has uploaded photos. The pin turns Yellow, signaling the Coordinator to check it.
-        Review = 1,     // Yellow 
+        /// <summary>
+        /// Field crew has uploaded photos for this vault. Waiting for coordinator review.
+        /// Map display: Yellow pin
+        /// </summary>
+        Review = 1,
 
-        // The Coordinator approved the work. The pin turns Green, and the background sync to Google Drive begins.
-        Complete = 2,   // Green 
-        
-        // The photos were bad. The pin turns Red, telling the crew to go back and fix it.
-        Rejected = 3    // Red 
+        /// <summary>
+        /// Coordinator approved the work. Photos are ready to be synced to Google Drive.
+        /// Map display: Green pin
+        /// </summary>
+        Complete = 2,
+
+        /// <summary>
+        /// Photos were rejected. Field crew needs to fix issues and re-upload.
+        /// Map display: Red pin
+        /// </summary>
+        Rejected = 3
     }
 }

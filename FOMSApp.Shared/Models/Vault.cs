@@ -1,21 +1,66 @@
-using NetTopologySuite.Geometries; //This is required to use the Point type for Location
+using NetTopologySuite.Geometries; // Required to use the Point type for geographic coordinates
 
 namespace FOMSApp.Shared.Models
 {
-    // (The Parent Entity)
-    // This class represents the physical object (vault) in the ground. It is the "Parent" because it owns the photos.
+    /// <summary>
+    /// Represents a physical fiber optic vault (underground access point) in the construction network.
+    /// This is a "Parent Entity" in a one-to-many relationship with Photo entities.
+    /// </summary>
+    /// <remarks>
+    /// Entity Framework Core will automatically create a database table called "Vaults" based on this class.
+    /// The Location property uses SQL Server's Geography data type for spatial queries and mapping.
+    /// </remarks>
     public class Vault
     {
-        public int Id { get; set; } // Primary Key: Unique identifier for each vault
-        public string Name { get; set; } = string.Empty; // Name of the vault (e.g., "Vault A1")
-        public string Color { get; set; } = "Blue";// Type of vault (e.g., Standard, Custom, etc.)
-        public VaultStatus Status { get; set; } = VaultStatus.Pending; // Status: Stores the current state (from the list in VaultStatus)
+        /// <summary>
+        /// Primary Key: Unique identifier for each vault record in the database.
+        /// Entity Framework automatically makes this an auto-incrementing identity column.
+        /// </summary>
+        public int Id { get; set; }
 
-        // Native SQL Geography type
-        // The most important field. It uses the Point type (from NetTopologySuite) to store the exact Latitude and Longitude. This is what allows us to plot it on a map.
-        public required Point Location { get; set; } // Using 'required' to ensure this property is set during object initialization.
-        
-        // Photos: A list (collection) of all photos attached to this specific vault.
-        public List<Photo> Photos { get; set; } = new();  //This creates a One-to-Many relationship (One Vault has Many Photos).
+        /// <summary>
+        /// Human-readable name for the vault (e.g., "Vault A1", "Downtown Vault", "North Route V-102").
+        /// Using string.Empty as default prevents null reference exceptions when working with the property.
+        /// </summary>
+        public string Name { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Color code for visual identification on the map. Can be a CSS color name or hex code.
+        /// Default is "Blue" - this can be changed based on vault type or status if needed.
+        /// </summary>
+        public string Color { get; set; } = "Blue";
+
+        /// <summary>
+        /// Current workflow status of the vault (Pending, Review, Complete, Rejected).
+        /// This drives the visual indicator (color) on the map and determines if photos should be synced to Google Drive.
+        /// Defaults to Pending (Gray) when a new vault is created.
+        /// </summary>
+        public VaultStatus Status { get; set; } = VaultStatus.Pending;
+
+        /// <summary>
+        /// Geographic coordinates (latitude/longitude) of the vault's physical location.
+        /// Uses NetTopologySuite's Point type which stores coordinates as (X=Longitude, Y=Latitude).
+        /// 
+        /// The 'required' keyword ensures this property must be set when creating a Vault instance.
+        /// This prevents runtime errors from null locations.
+        /// 
+        /// Entity Framework maps this to SQL Server's Geography type (configured in AppDbContext),
+        /// which enables spatial queries like "find all vaults within 1km of a point".
+        /// </summary>
+        public required Point Location { get; set; }
+
+        /// <summary>
+        /// Navigation Property: Collection of all photos associated with this vault.
+        /// This creates a one-to-many relationship in the database (one Vault can have many Photos).
+        /// 
+        /// Entity Framework uses this property to:
+        /// 1. Create a foreign key (VaultId) in the Photos table
+        /// 2. Enable eager loading with .Include(v => v.Photos)
+        /// 3. Allow navigation from a Vault to its Photos: vault.Photos
+        /// 
+        /// Initialized as an empty list to prevent null reference exceptions.
+        /// The list is automatically populated when you use .Include() in queries.
+        /// </summary>
+        public List<Photo> Photos { get; set; } = new();
     }
 }
