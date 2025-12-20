@@ -39,5 +39,19 @@ namespace FOMSApp.API.Controllers
 
             return vault;
         }
+
+        // POST: api/vaults
+        /// <summary>
+        /// Creates a new vault at the specified location with the provided name and status.
+        /// </summary>
+        /// <param name="vault">The vault object containing location, name, color, and status.</param>
+        /// <returns>The created vault with its assigned ID.</returns>
+        [HttpPost]
+        public async Task<ActionResult<Vault>> PostVault(Vault vault)
+        {
+            _context.Vaults.Add(vault);
+            await _context.SaveChangesAsync();
+            return CreatedAtAction(nameof(GetVault), new { id = vault.Id }, vault);
+        }
     }
 }

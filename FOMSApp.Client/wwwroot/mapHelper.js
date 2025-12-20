@@ -49,3 +49,18 @@ export function addPolyline(map, coordinates, color, popupText) {
     }
     return polyline;
 }
+
+// Function to add a click event listener to the map that calls back to C#
+// dotNetReference: The .NET object reference to invoke the OnMapClick method
+export function addClickEventListener(map, dotNetReference) {
+    map.on('click', function(e) {
+        // e.latlng contains the latitude and longitude of the click
+        // Call the C# method OnMapClick with the coordinates
+        dotNetReference.invokeMethodAsync('OnMapClick', e.latlng.lat, e.latlng.lng);
+    });
+}
+
+// Function to remove a layer (marker, polyline, circle, etc.) from the map
+export function removeLayer(map, layer) {
+    map.removeLayer(layer);
+}

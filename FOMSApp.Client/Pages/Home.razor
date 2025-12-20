@@ -1,8 +1,10 @@
-﻿@page "/"
+@page "/"
 @using FOMSApp.Shared.Models
 @using Microsoft.JSInterop
 @using System.Text.Json
 @using NetTopologySuite.IO.Converters
+@using NetTopologySuite.Geometries
+@using NetTopologySuite
 @inject HttpClient Http
 @inject IJSRuntime JS
 
@@ -16,16 +18,86 @@
 }
 else
 {
+    <!-- Toolbar for map editing modes -->
+    <div class="btn-toolbar mb-3" role="toolbar">
+        <div class="btn-group me-2" role="group">
+            <button type="button" 
+                    class="btn @(currentMode == MapMode.View ? "btn-primary" : "btn-outline-primary")"
+                    @onclick="async () => await SetMode(MapMode.View)">
+                View
+            </button>
+            <button type="button" 
+                    class="btn @(currentMode == MapMode.AddVault ? "btn-primary" : "btn-outline-primary")"
+                    @onclick="async () => await SetMode(MapMode.AddVault)">
+                Add Vault
+            </button>
+            <button type="button" 
+                    class="btn @(currentMode == MapMode.AddMidpoint ? "btn-primary" : "btn-outline-primary")"
+                    @onclick="async () => await SetMode(MapMode.AddMidpoint)">
+                Add Midpoint
+            </button>
+            <button type="button" 
+                    class="btn @(currentMode == MapMode.DrawCable ? "btn-primary" : "btn-outline-primary")"
+                    @onclick="async () => await SetMode(MapMode.DrawCable)">
+                Draw Cable
+            </button>
+        </div>
+    </div>
+
+    <!-- Status message for current mode -->
+    @if (currentMode != MapMode.View)
+    {
+        <div class="alert alert-info" role="alert">
+            @GetModeInstructions()
+        </div>
+    }
+
+    <!-- Cable drawing progress indicator -->
+    @if (currentMode == MapMode.DrawCable && cablePoints.Count > 0)
+    {
+        <div class="alert alert-warning" role="alert">
+            Cable drawing in progress: @cablePoints.Count point(s) added. Click "Finish Cable" to save or "Cancel" to start over.
+            <button type="button" class="btn btn-sm btn-success ms-2" @onclick="FinishCable">Finish Cable</button>
+            <button type="button" class="btn btn-sm btn-danger ms-2" @onclick="CancelCable">Cancel</button>
+        </div>
+    }
+
     <div id="map" style="height: 600px; width: 100%;"></div>
 }
 
 @code {
+    /// <summary>
+    /// Enumeration defining the different interaction modes for the map editor.
+    /// </summary>
+    private enum MapMode
+    {
+        View,           // Default mode - no editing, just viewing
+        AddVault,       // Click on map to create a new vault
+        AddMidpoint,    // Click on map to create a new midpoint
+        DrawCable       // Click multiple points to define a cable path
+    }
+
     private Vault[]? vaults;
     private Midpoint[]? midpoints;
-    private Cable[]? cables; // <--- The list of lines
+    private Cable[]? cables;
     
     private IJSObjectReference? module;
     private IJSObjectReference? mapInstance;
+    
+    /// <summary>
+    /// Current interaction mode for the map editor.
+    /// </summary>
+    private MapMode currentMode = MapMode.View;
+    
+    /// <summary>
+    /// Temporary storage for points collected while drawing a cable.
+    /// </summary>
+    private List<(double Lat, double Lng)> cablePoints = new();
+    
+    /// <summary>
+    /// Temporary polyline reference for previewing the cable being drawn.
+    /// </summary>
+    private IJSObjectReference? tempCablePolyline;
 
     protected override async Task OnInitializedAsync()
     {
@@ -89,11 +161,348 @@ else
                         await module.InvokeVoidAsync("addPolyline", mapInstance, latLngs, cable.Color, $"<b>{cable.Name}</b>");
                     }
                 }
+
+                // Setup click event listener for map interactions
+                await SetupMapClickListener();
             }
             catch(Exception ex)
             {
                 Console.WriteLine($"MAP RENDER ERROR: {ex.Message}");
             }
         }
+    }
+
+    /// <summary>
+    /// Sets up the click event listener on the map to handle user interactions based on the current mode.
+    /// </summary>
+    private async Task SetupMapClickListener()
+    {
+        if (module != null && mapInstance != null)
+        {
+            // Register a callback that will be invoked from JavaScript when the map is clicked
+            var dotNetReference = DotNetObjectReference.Create(this);
+            await module.InvokeVoidAsync("addClickEventListener", mapInstance, dotNetReference);
+        }
+    }
+
+    /// <summary>
+    /// Handles map click events from JavaScript. This method is called via JSInterop when the user clicks on the map.
+    /// </summary>
+    /// <param name="lat">Latitude of the click location.</param>
+    /// <param name="lng">Longitude of the click location.</param>
+    [JSInvokable]
+    public async Task OnMapClick(double lat, double lng)
+    {
+        if (currentMode == MapMode.View)
+        {
+            // In view mode, clicks don't do anything
+            return;
+        }
+
+        try
+        {
+            switch (currentMode)
+            {
+                case MapMode.AddVault:
+                    await CreateVaultAtLocation(lat, lng);
+                    break;
+
+                case MapMode.AddMidpoint:
+                    await CreateMidpointAtLocation(lat, lng);
+                    break;
+
+                case MapMode.DrawCable:
+                    await AddCablePoint(lat, lng);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"ERROR handling map click: {ex.Message}");
+        }
+
+        // Trigger UI update
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Changes the current map interaction mode and provides user feedback.
+    /// </summary>
+    /// <param name="mode">The mode to switch to.</param>
+    private async Task SetMode(MapMode mode)
+    {
+        // If switching away from DrawCable mode, cancel any in-progress cable
+        if (currentMode == MapMode.DrawCable && mode != MapMode.DrawCable)
+        {
+            await CancelCable();
+        }
+
+        currentMode = mode;
+    }
+
+    /// <summary>
+    /// Returns user-friendly instructions for the current map mode.
+    /// </summary>
+    private string GetModeInstructions()
+    {
+        return currentMode switch
+        {
+            MapMode.AddVault => "Click on the map to add a new vault at that location.",
+            MapMode.AddMidpoint => "Click on the map to add a new midpoint at that location.",
+            MapMode.DrawCable => "Click multiple points on the map to define the cable path. Click 'Finish Cable' when done.",
+            _ => ""
+        };
+    }
+
+    /// <summary>
+    /// Creates a new vault at the specified geographic coordinates.
+    /// </summary>
+    /// <param name="lat">Latitude of the vault location.</param>
+    /// <param name="lng">Longitude of the vault location.</param>
+    private async Task CreateVaultAtLocation(double lat, double lng)
+    {
+        if (module == null || mapInstance == null) return;
+
+        // Prompt user for vault name
+        var vaultName = await JS.InvokeAsync<string>("prompt", "Enter vault name:");
+        if (string.IsNullOrWhiteSpace(vaultName))
+        {
+            return; // User cancelled
+        }
+
+        // Create Point geometry (NetTopologySuite uses X for Longitude, Y for Latitude)
+        // SRID 4326 is the standard for GPS (WGS 84)
+        var factory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
+        var location = factory.CreatePoint(new Coordinate(lng, lat));
+
+        // Create the vault object
+        var newVault = new Vault
+        {
+            Name = vaultName,
+            Location = location,
+            Status = VaultStatus.Pending,
+            Color = "Blue"
+        };
+
+        // Serialize with GeoJSON support
+        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        options.Converters.Add(new GeoJsonConverterFactory());
+
+        // POST to API
+        var response = await Http.PostAsJsonAsync("api/vaults", newVault, options);
+        
+        if (response.IsSuccessStatusCode)
+        {
+            var createdVault = await response.Content.ReadFromJsonAsync<Vault>(options);
+            
+            if (createdVault != null && createdVault.Location != null)
+            {
+                // Add marker to map immediately
+                string popup = $"<b>{createdVault.Name}</b><br>{createdVault.Status}<br><a href='vault/{createdVault.Id}'>View Details</a>";
+                await module.InvokeVoidAsync("addMarker", mapInstance, createdVault.Location.Y, createdVault.Location.X, popup);
+
+                // Refresh the vaults list
+                await LoadVaults();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Creates a new midpoint at the specified geographic coordinates.
+    /// </summary>
+    /// <param name="lat">Latitude of the midpoint location.</param>
+    /// <param name="lng">Longitude of the midpoint location.</param>
+    private async Task CreateMidpointAtLocation(double lat, double lng)
+    {
+        if (module == null || mapInstance == null) return;
+
+        // Prompt user for midpoint name
+        var midpointName = await JS.InvokeAsync<string>("prompt", "Enter midpoint name:");
+        if (string.IsNullOrWhiteSpace(midpointName))
+        {
+            return; // User cancelled
+        }
+
+        // Create Point geometry
+        // SRID 4326 is the standard for GPS (WGS 84)
+        var factory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
+        var location = factory.CreatePoint(new Coordinate(lng, lat));
+
+        // Create the midpoint object
+        var newMidpoint = new Midpoint
+        {
+            Name = midpointName,
+            Location = location,
+            Color = "Green"
+        };
+
+        // Serialize with GeoJSON support
+        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        options.Converters.Add(new GeoJsonConverterFactory());
+
+        // POST to API
+        var response = await Http.PostAsJsonAsync("api/midpoints", newMidpoint, options);
+        
+        if (response.IsSuccessStatusCode)
+        {
+            var createdMidpoint = await response.Content.ReadFromJsonAsync<Midpoint>(options);
+            
+            if (createdMidpoint != null && createdMidpoint.Location != null)
+            {
+                // Add circle to map immediately
+                await module.InvokeVoidAsync("addCircle", mapInstance, createdMidpoint.Location.Y, createdMidpoint.Location.X, createdMidpoint.Color, $"<b>{createdMidpoint.Name}</b>");
+
+                // Refresh the midpoints list
+                await LoadMidpoints();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Adds a point to the current cable being drawn and updates the preview polyline.
+    /// </summary>
+    /// <param name="lat">Latitude of the point.</param>
+    /// <param name="lng">Longitude of the point.</param>
+    private async Task AddCablePoint(double lat, double lng)
+    {
+        if (module == null || mapInstance == null) return;
+
+        // Add point to collection
+        cablePoints.Add((lat, lng));
+
+        // If we have at least 2 points, draw/update the preview polyline
+        if (cablePoints.Count >= 2)
+        {
+            // Remove previous preview if it exists
+            if (tempCablePolyline != null)
+            {
+                await module.InvokeVoidAsync("removeLayer", mapInstance, tempCablePolyline);
+            }
+
+            // Create array of coordinates for the preview
+            var latLngs = cablePoints.Select(p => new { lat = p.Lat, lng = p.Lng }).ToList<object>();
+            
+            // Draw preview polyline in orange
+            tempCablePolyline = await module.InvokeAsync<IJSObjectReference>("addPolyline", mapInstance, latLngs, "Orange", "Preview - Click 'Finish Cable' to save");
+        }
+        else if (cablePoints.Count == 1)
+        {
+            // Show first point as a marker
+            await module.InvokeVoidAsync("addMarker", mapInstance, lat, lng, "Start point - Click more points to draw cable");
+        }
+    }
+
+    /// <summary>
+    /// Completes the cable drawing by saving the collected points as a LineString to the database.
+    /// </summary>
+    private async Task FinishCable()
+    {
+        if (cablePoints.Count < 2)
+        {
+            await JS.InvokeVoidAsync("alert", "A cable needs at least 2 points. Please add more points before finishing.");
+            return;
+        }
+
+        // Prompt user for cable name
+        var cableName = await JS.InvokeAsync<string>("prompt", "Enter cable name:");
+        if (string.IsNullOrWhiteSpace(cableName))
+        {
+            return; // User cancelled
+        }
+
+        // Create LineString from collected points (NetTopologySuite uses X for Longitude, Y for Latitude)
+        // SRID 4326 is the standard for GPS (WGS 84)
+        var factory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
+        var coordinates = cablePoints.Select(p => new Coordinate(p.Lng, p.Lat)).ToArray();
+        var lineString = factory.CreateLineString(coordinates);
+
+        // Create the cable object
+        var newCable = new Cable
+        {
+            Name = cableName,
+            Path = lineString,
+            Color = "Orange"
+        };
+
+        // Serialize with GeoJSON support
+        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        options.Converters.Add(new GeoJsonConverterFactory());
+
+        // POST to API
+        var response = await Http.PostAsJsonAsync("api/cables", newCable, options);
+        
+        if (response.IsSuccessStatusCode)
+        {
+            var createdCable = await response.Content.ReadFromJsonAsync<Cable>(options);
+            
+            if (createdCable != null && createdCable.Path != null && module != null && mapInstance != null)
+            {
+                // Remove preview polyline
+                if (tempCablePolyline != null)
+                {
+                    await module.InvokeVoidAsync("removeLayer", mapInstance, tempCablePolyline);
+                    tempCablePolyline = null;
+                }
+
+                // Draw the saved cable
+                var latLngs = new List<object>();
+                foreach (var coord in createdCable.Path.Coordinates)
+                {
+                    latLngs.Add(new { lat = coord.Y, lng = coord.X });
+                }
+                await module.InvokeVoidAsync("addPolyline", mapInstance, latLngs, createdCable.Color, $"<b>{createdCable.Name}</b>");
+
+                // Refresh the cables list
+                await LoadCables();
+            }
+
+            // Reset cable drawing state
+            cablePoints.Clear();
+            currentMode = MapMode.View;
+        }
+    }
+
+    /// <summary>
+    /// Cancels the current cable drawing operation and clears the preview.
+    /// </summary>
+    private async Task CancelCable()
+    {
+        if (module != null && mapInstance != null && tempCablePolyline != null)
+        {
+            await module.InvokeVoidAsync("removeLayer", mapInstance, tempCablePolyline);
+            tempCablePolyline = null;
+        }
+        cablePoints.Clear();
+        currentMode = MapMode.View;
+    }
+
+    /// <summary>
+    /// Reloads the vaults from the API and refreshes the display.
+    /// </summary>
+    private async Task LoadVaults()
+    {
+        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        options.Converters.Add(new GeoJsonConverterFactory());
+        vaults = await Http.GetFromJsonAsync<Vault[]>("api/vaults", options);
+    }
+
+    /// <summary>
+    /// Reloads the midpoints from the API and refreshes the display.
+    /// </summary>
+    private async Task LoadMidpoints()
+    {
+        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        options.Converters.Add(new GeoJsonConverterFactory());
+        midpoints = await Http.GetFromJsonAsync<Midpoint[]>("api/midpoints", options);
+    }
+
+    /// <summary>
+    /// Reloads the cables from the API and refreshes the display.
+    /// </summary>
+    private async Task LoadCables()
+    {
+        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        options.Converters.Add(new GeoJsonConverterFactory());
+        cables = await Http.GetFromJsonAsync<Cable[]>("api/cables", options);
     }
 }

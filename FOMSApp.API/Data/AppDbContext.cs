@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore; // EF Core namespace for DbContext and related classes
-using FOMSApp.Shared.Models; // Namespace where Vault and ConstructionPhoto classes are defined
+using FOMSApp.Shared.Models; // Namespace where Vault and Photo classes are defined
 
 namespace FOMSApp.API.Data
 {
@@ -14,7 +14,6 @@ namespace FOMSApp.API.Data
         public DbSet<Photo> Photos { get; set; } = null!; // Add a DbSet for Photos. 
         public DbSet<Cable> Cables { get; set; } = null!; // Add a DbSet for Cables (Map Polylines).
         public DbSet<Midpoint> Midpoints { get; set; } = null!; // Add a DbSet for Midpoints (Map Points along Cables).
-        public DbSet<ConstructionPhoto> ConstructionPhotos { get; set; } = null!; // Add a DbSet for ConstructionPhotos. (Am I using this model?)
         
         // OnModelCreating: In this method we tell the sql server how to treat our spatial data
         protected override void OnModelCreating(ModelBuilder modelBuilder) 

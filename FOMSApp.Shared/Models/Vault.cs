@@ -16,6 +16,6 @@ namespace FOMSApp.Shared.Models
         public required Point Location { get; set; } // Using 'required' to ensure this property is set during object initialization.
         
         // Photos: A list (collection) of all photos attached to this specific vault.
-        public List<ConstructionPhoto> Photos { get; set; } = new();  //This creates a One-to-Many relationship (One Vault has Many Photos).
+        public List<Photo> Photos { get; set; } = new();  //This creates a One-to-Many relationship (One Vault has Many Photos).
     }
 }
