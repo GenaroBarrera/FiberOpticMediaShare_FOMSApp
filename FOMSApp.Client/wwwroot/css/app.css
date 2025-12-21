@@ -112,3 +112,24 @@ code {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+/* Map container styling to fill available vertical space */
+.map-container {
+    width: 100%;
+    /* Calculate height: viewport height minus header, toolbar, alerts, and padding */
+    height: calc(100vh - 150px);
+    min-height: 500px; /* Ensure minimum usable height */
+    /* Consistent bottom offset matching the left padding (px-4 = 1.5rem) */
+    margin-bottom: 1.5rem;
+}
+
+/* On larger screens, match the 2rem left padding for bottom offset */
+@media (min-width: 641px) {
+    .map-container {
+        /* Bottom margin matches the left padding offset (2rem) */
+        margin-bottom: 2rem;
+        /* Extend right margin to match left offset: article has 2rem left, 1.5rem right */
+        /* Use negative margin to compensate and align with left */
+        margin-right: -0.5rem; /* Makes effective right offset = 1.5rem + 0.5rem = 2rem to match left */
+    }
+}

@@ -2,8 +2,8 @@
 
 // Function to initialize the map
 export function initMap(elementId) { 
-    // 1. Create the map and center it on Austin, TX (or your default location)
-    var map = L.map(elementId).setView([30.2672, -97.7431], 13); // Latitude, Longitude, Zoom level
+    // 1. Create the map and center it on San Antonio, TX
+    var map = L.map(elementId).setView([29.54248, -98.73548], 18); // Latitude, Longitude, Zoom level (18 for street-level detail)
 
     // 2. Add the "Tile Layer" (the actual map images from OpenStreetMap)
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
