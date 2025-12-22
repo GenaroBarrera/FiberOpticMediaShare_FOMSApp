@@ -3,7 +3,9 @@
 @using System.Text.Json
 @using System.Net.Http.Headers
 @using NetTopologySuite.IO.Converters
+@using Microsoft.JSInterop
 @inject HttpClient Http
+@inject IJSRuntime JS
 
 <PageTitle>Vault Details</PageTitle>
 
@@ -31,8 +33,31 @@ else
         <div class="card-body">
 
             <div class="mb-3">
-                <label>Upload a new photo:</label>
-                <InputFile OnChange="@UploadPhoto" class="form-control" accept=".jpg,.jpeg,.png" />
+                <label>Select a photo to upload:</label>
+                <div class="input-group">
+                    <InputFile OnChange="@OnFileSelected" class="form-control" accept=".jpg,.jpeg,.png" @ref="fileInput" />
+                </div>
+                @if (selectedFile != null)
+                {
+                    <div class="mt-2">
+                        <p class="mb-2">
+                            <strong>Selected file:</strong> @selectedFile.Name 
+                            <span class="text-muted">(@(selectedFile.Size / 1024) KB)</span>
+                        </p>
+                        <button type="button" class="btn btn-primary" @onclick="UploadSelectedPhoto" disabled="@(isUploading)">
+                            @if (isUploading)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                <text>Uploading...</text>
+                            }
+                            else
+                            {
+                                <text>Upload Photo</text>
+                            }
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary ms-2" @onclick="ClearSelectedFile">Cancel</button>
+                    </div>
+                }
             </div>
 
             <hr />
@@ -57,6 +82,11 @@ else
                                     @onclick="() => OpenPhoto(photo.FileName)">
                                 <div class="card-body">
                                     <small class="text-muted">Uploaded: @photo.UploadedAt.ToShortDateString()</small>
+                                    <div class="mt-2">
+                                        <button type="button" class="btn btn-sm btn-danger" @onclick="() => DeletePhoto(photo.Id)" @onclick:stopPropagation="true">
+                                            Delete Photo
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -87,6 +117,24 @@ else
     private Vault? vault;
     private List<Photo>? photos;
     private string? selectedPhotoUrl; // Holds the URL of the photo we want to zoom in on
+    
+    /// <summary>
+    /// Reference to the file input element. Used to reset it after successful upload
+    /// so users can upload multiple photos without page refresh.
+    /// </summary>
+    private InputFile? fileInput;
+
+    /// <summary>
+    /// Stores the currently selected file before upload.
+    /// This allows users to browse and select a file, then upload it with a separate button.
+    /// </summary>
+    private IBrowserFile? selectedFile;
+
+    /// <summary>
+    /// Indicates whether a photo upload is currently in progress.
+    /// Used to disable the upload button and show a loading spinner during upload.
+    /// </summary>
+    private bool isUploading = false;
 
     private void OpenPhoto(string fileName) // Opens the photo in a larger view
     {
@@ -117,21 +165,55 @@ else
         photos = await Http.GetFromJsonAsync<List<Photo>>($"api/photos/vault/{Id}");
     }
 
-    // 3. The Upload Logic
-    private async Task UploadPhoto(InputFileChangeEventArgs e)
+    /// <summary>
+    /// Handles file selection when the user browses for a file.
+    /// Stores the selected file but does not upload it yet.
+    /// </summary>
+    /// <param name="e">Event arguments containing the selected file</param>
+    private void OnFileSelected(InputFileChangeEventArgs e)
     {
-        var file = e.File;
-        if (file != null)
+        // Store the selected file for later upload
+        selectedFile = e.File;
+        
+        // Trigger UI update to show the selected file name
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Clears the selected file without uploading it.
+    /// Allows users to cancel and select a different file.
+    /// </summary>
+    private void ClearSelectedFile()
+    {
+        selectedFile = null;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Uploads the previously selected photo file to the server.
+    /// This method is called when the user clicks the "Upload Photo" button.
+    /// </summary>
+    private async Task UploadSelectedPhoto()
+    {
+        if (selectedFile == null)
+        {
+            return;
+        }
+
+        isUploading = true;
+        StateHasChanged();
+
+        try
         {
             // Create a specialized "content" container for sending files
             using var content = new MultipartFormDataContent();
 
             // We must resize/limit the file stream to prevent massive uploads crashing the browser
             // Allow up to 5MB
-            var fileContent = new StreamContent(file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024));
-            fileContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
+            var fileContent = new StreamContent(selectedFile.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024));
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue(selectedFile.ContentType);
 
-            content.Add(content: fileContent, name: "file", fileName: file.Name);
+            content.Add(content: fileContent, name: "file", fileName: selectedFile.Name);
             content.Add(content: new StringContent(Id.ToString()), name: "vaultId");
 
             // Send to API
@@ -139,13 +221,63 @@ else
 
             if (response.IsSuccessStatusCode)
             {
+                // Clear the selected file
+                selectedFile = null;
+                
                 // Refresh the list so the new photo appears instantly
                 await LoadPhotos();
             }
             else
             {
-                Console.WriteLine("Upload failed!");
+                var errorMessage = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Upload failed: {errorMessage}");
+                await JS.InvokeVoidAsync("alert", $"Upload failed: {errorMessage}");
             }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error uploading photo: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Error uploading photo: {ex.Message}");
+        }
+        finally
+        {
+            isUploading = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Deletes a photo from the database and removes it from the display.
+    /// </summary>
+    /// <param name="photoId">The unique ID of the photo to delete</param>
+    private async Task DeletePhoto(int photoId)
+    {
+        // Show confirmation dialog
+        var confirmed = await JS.InvokeAsync<bool>("confirm", "Are you sure you want to delete this photo? This action cannot be undone.");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        try
+        {
+            // Call API to delete the photo
+            var response = await Http.DeleteAsync($"api/photos/{photoId}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Refresh the photos list to remove the deleted photo from the display
+                await LoadPhotos();
+            }
+            else
+            {
+                await JS.InvokeAsync<string>("alert", "Failed to delete photo. Please try again.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting photo: {ex.Message}");
+            await JS.InvokeAsync<string>("alert", $"Error deleting photo: {ex.Message}");
         }
     }
 }

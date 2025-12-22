@@ -145,6 +145,62 @@ namespace FOMSApp.API.Controllers
             // Return the created Photo record (includes the auto-generated ID)
             return Ok(photo);
         }
+
+        /// <summary>
+        /// Deletes a photo from the database and removes the physical file from disk.
+        /// </summary>
+        /// <param name="id">The unique ID of the photo to delete (from the URL route)</param>
+        /// <returns>
+        /// HTTP 204 No Content if successfully deleted, or HTTP 404 Not Found if the photo doesn't exist.
+        /// </returns>
+        /// <remarks>
+        /// This method performs two operations:
+        /// 1. Deletes the Photo record from the database
+        /// 2. Deletes the physical image file from the wwwroot/uploads folder
+        /// 
+        /// If the file doesn't exist on disk, the database record is still deleted (prevents orphaned records).
+        /// This is a "best effort" cleanup - we don't fail if the file is already missing.
+        /// 
+        /// RESTful Best Practice: DELETE operations typically return 204 No Content (success with no body)
+        /// rather than 200 OK, because there's nothing meaningful to return after deletion.
+        /// </remarks>
+        // DELETE: api/photos/5
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeletePhoto(int id)
+        {
+            // Find the photo by primary key
+            var photo = await _context.Photos.FindAsync(id);
+            
+            // Return 404 if not found (standard REST practice)
+            if (photo == null)
+                return NotFound();
+
+            // Delete the physical file from disk (if it exists)
+            // Use System.IO.File to avoid conflict with ControllerBase.File method
+            string filePath = Path.Combine(_env.WebRootPath, "uploads", photo.FileName);
+            if (System.IO.File.Exists(filePath))
+            {
+                try
+                {
+                    System.IO.File.Delete(filePath);
+                }
+                catch (Exception ex)
+                {
+                    // Log the error but continue with database deletion
+                    // This prevents orphaned database records if file deletion fails
+                    Console.WriteLine($"Warning: Could not delete file {filePath}: {ex.Message}");
+                }
+            }
+
+            // Mark the entity for deletion
+            _context.Photos.Remove(photo);
+            
+            // Execute the SQL DELETE statement
+            await _context.SaveChangesAsync();
+            
+            // Return 204 No Content (successful deletion with no response body)
+            return NoContent();
+        }
     }
 
     /// <summary>
@@ -173,6 +229,6 @@ namespace FOMSApp.API.Controllers
         /// IFormFile is ASP.NET Core's representation of an uploaded file.
         /// It provides access to the file stream, filename, content type, and size.
         /// </summary>
-        public IFormFile File { get; set; }
+        public IFormFile? File { get; set; }
     }
 }
