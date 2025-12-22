@@ -1,5 +1,13 @@
 // This file holds functions that C# can call to control the map
 
+// Global variable to track if we're in delete mode
+var isDeleteMode = false;
+
+// Function to set the delete mode state
+export function setDeleteMode(enabled) {
+    isDeleteMode = enabled;
+}
+
 // Function to initialize the map
 export function initMap(elementId) { 
     // 1. Create the map and center it on San Antonio, TX
@@ -15,13 +23,33 @@ export function initMap(elementId) {
 }
 
 // Function to add a marker to the map
-export function addMarker(map, lat, lng, popupText) {
-    L.marker([lat, lng]).addTo(map)
-        .bindPopup(popupText); // Add a popup to the marker
+// Returns the marker so it can be stored and deleted later
+export function addMarker(map, lat, lng, popupText, entityId, dotNetReference) {
+    var marker = L.marker([lat, lng]).addTo(map);
+    marker.bindPopup(popupText); // Add a popup to the marker
+    
+    // If entityId and dotNetReference are provided, add click handler for deletion
+    if (entityId && dotNetReference) {
+        marker.on('click', function(e) {
+            // If in delete mode, prevent popup from opening and handle deletion
+            if (isDeleteMode) {
+                e.originalEvent.stopPropagation(); // Prevent event bubbling
+                e.originalEvent.preventDefault(); // Prevent default behavior
+                marker.closePopup(); // Close popup if it's already open
+                // Call C# method to handle the click (for deletion mode)
+                dotNetReference.invokeMethodAsync('OnEntityClick', 'vault', entityId);
+                return false; // Prevent further event handling
+            }
+            // If not in delete mode, let the popup open normally (default behavior)
+        });
+    }
+    
+    return marker;
 }
 
 // Function to add a small circle marker (Dot)
-export function addCircle(map, lat, lng, color, popupText) {
+// Returns the circle marker so it can be stored and deleted later
+export function addCircle(map, lat, lng, color, popupText, entityId, dotNetReference) {
     var circleMarker = L.circleMarker([lat, lng], {
         color: 'black',       // Border color
         fillColor: color,     // Inside color (e.g., 'green')
@@ -33,11 +61,28 @@ export function addCircle(map, lat, lng, color, popupText) {
         circleMarker.bindPopup(popupText);
     }
     
+    // If entityId and dotNetReference are provided, add click handler for deletion
+    if (entityId && dotNetReference) {
+        circleMarker.on('click', function(e) {
+            // If in delete mode, prevent popup from opening and handle deletion
+            if (isDeleteMode) {
+                e.originalEvent.stopPropagation(); // Prevent event bubbling
+                e.originalEvent.preventDefault(); // Prevent default behavior
+                circleMarker.closePopup(); // Close popup if it's already open
+                // Call C# method to handle the click (for deletion mode)
+                dotNetReference.invokeMethodAsync('OnEntityClick', 'midpoint', entityId);
+                return false; // Prevent further event handling
+            }
+            // If not in delete mode, let the popup open normally (default behavior)
+        });
+    }
+    
     return circleMarker;
 }
 
 // Function to add a polyline to the map
-export function addPolyline(map, coordinates, color, popupText) {
+// Returns the polyline so it can be stored and deleted later
+export function addPolyline(map, coordinates, color, popupText, entityId, dotNetReference) {
     var polyline = L.polyline(coordinates, {
         color: color,
         weight: 4,
@@ -47,6 +92,15 @@ export function addPolyline(map, coordinates, color, popupText) {
     if (popupText) {
         polyline.bindPopup(popupText);
     }
+    
+    // If entityId and dotNetReference are provided, add click handler for deletion
+    if (entityId && dotNetReference) {
+        polyline.on('click', function() {
+            // Call C# method to handle the click (for deletion mode)
+            dotNetReference.invokeMethodAsync('OnEntityClick', 'cable', entityId);
+        });
+    }
+    
     return polyline;
 }
 

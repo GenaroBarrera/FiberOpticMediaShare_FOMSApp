@@ -41,6 +41,11 @@ else
                     @onclick="async () => await SetMode(MapMode.DrawCable)">
                 Draw Cable
             </button>
+            <button type="button" 
+                    class="btn @(currentMode == MapMode.Delete ? "btn-primary" : "btn-outline-primary")"
+                    @onclick="async () => await SetMode(MapMode.Delete)">
+                Delete
+            </button>
         </div>
     </div>
 
@@ -65,6 +70,8 @@ else
     <div id="map" class="map-container"></div>
 }
 
+@implements IDisposable
+
 @code {
     /// <summary>
     /// Enumeration defining the different interaction modes for the map editor.
@@ -74,7 +81,8 @@ else
         View,           // Default mode - no editing, just viewing
         AddVault,       // Click on map to create a new vault
         AddMidpoint,    // Click on map to create a new midpoint
-        DrawCable       // Click multiple points to define a cable path
+        DrawCable,      // Click multiple points to define a cable path
+        Delete          // Click on existing items to delete them
     }
 
     private Vault[]? vaults;
@@ -98,6 +106,19 @@ else
     /// Temporary polyline reference for previewing the cable being drawn.
     /// </summary>
     private IJSObjectReference? tempCablePolyline;
+
+    /// <summary>
+    /// Dictionary to store map layer references (markers, circles, polylines) with their entity IDs.
+    /// Used to identify which item was clicked for deletion.
+    /// Key: Entity ID (vault/midpoint/cable ID), Value: JavaScript object reference to the Leaflet layer
+    /// </summary>
+    private Dictionary<string, IJSObjectReference> mapLayers = new();
+
+    /// <summary>
+    /// .NET object reference for JavaScript interop callbacks.
+    /// Used to allow JavaScript to call back into C# methods (e.g., for delete functionality).
+    /// </summary>
+    private DotNetObjectReference<Home>? dotNetReference;
 
     protected override async Task OnInitializedAsync()
     {
@@ -126,26 +147,35 @@ else
                 module = await JS.InvokeAsync<IJSObjectReference>("import", "./mapHelper.js");
                 mapInstance = await module.InvokeAsync<IJSObjectReference>("initMap", "map");
 
-                // 1. Draw VAULTS (Pins)
+                // Setup click event listener for map interactions (needed for delete mode)
+                dotNetReference = DotNetObjectReference.Create(this);
+                await SetupMapClickListener();
+                
+                // Initialize delete mode state in JavaScript
+                await module.InvokeVoidAsync("setDeleteMode", currentMode == MapMode.Delete);
+
+                // 1. Draw VAULTS (Pins) - Store layer references for deletion
                 foreach (var vault in vaults)
                 {
                     if (vault.Location != null)
                     {
                         string popup = $"<b>{vault.Name}</b><br>{vault.Status}<br><a href='vault/{vault.Id}'>View Details</a>";
-                        await module.InvokeVoidAsync("addMarker", mapInstance, vault.Location.Y, vault.Location.X, popup);
+                        var markerRef = await module.InvokeAsync<IJSObjectReference>("addMarker", mapInstance, vault.Location.Y, vault.Location.X, popup, vault.Id, dotNetReference);
+                        mapLayers[$"vault_{vault.Id}"] = markerRef;
                     }
                 }
 
-                // 2. Draw MIDPOINTS (Dots)
+                // 2. Draw MIDPOINTS (Dots) - Store layer references for deletion
                 foreach (var mp in midpoints)
                 {
                     if (mp.Location != null)
                     {
-                        await module.InvokeVoidAsync("addCircle", mapInstance, mp.Location.Y, mp.Location.X, mp.Color, $"<b>{mp.Name}</b>");
+                        var circleRef = await module.InvokeAsync<IJSObjectReference>("addCircle", mapInstance, mp.Location.Y, mp.Location.X, mp.Color, $"<b>{mp.Name}</b>", mp.Id, dotNetReference);
+                        mapLayers[$"midpoint_{mp.Id}"] = circleRef;
                     }
                 }
 
-                // 3. Draw CABLES (Lines)
+                // 3. Draw CABLES (Lines) - Store layer references for deletion
                 foreach (var cable in cables)
                 {
                     if (cable.Path != null)
@@ -157,13 +187,11 @@ else
                             latLngs.Add(new { lat = coord.Y, lng = coord.X });
                         }
 
-                        // Call the JS function
-                        await module.InvokeVoidAsync("addPolyline", mapInstance, latLngs, cable.Color, $"<b>{cable.Name}</b>");
+                        // Call the JS function and store the reference
+                        var polylineRef = await module.InvokeAsync<IJSObjectReference>("addPolyline", mapInstance, latLngs, cable.Color, $"<b>{cable.Name}</b>", cable.Id, dotNetReference);
+                        mapLayers[$"cable_{cable.Id}"] = polylineRef;
                     }
                 }
-
-                // Setup click event listener for map interactions
-                await SetupMapClickListener();
             }
             catch(Exception ex)
             {
@@ -182,6 +210,55 @@ else
             // Register a callback that will be invoked from JavaScript when the map is clicked
             var dotNetReference = DotNetObjectReference.Create(this);
             await module.InvokeVoidAsync("addClickEventListener", mapInstance, dotNetReference);
+        }
+    }
+
+    /// <summary>
+    /// Handles clicks on map entities (vaults, midpoints, cables) when in Delete mode.
+    /// This method is called from JavaScript when a user clicks on a marker, circle, or polyline.
+    /// </summary>
+    /// <param name="entityType">The type of entity clicked: "vault", "midpoint", or "cable"</param>
+    /// <param name="entityId">The unique ID of the entity to delete</param>
+    [JSInvokable]
+    public async Task OnEntityClick(string entityType, int entityId)
+    {
+        // Log for debugging
+        Console.WriteLine($"OnEntityClick called: type={entityType}, id={entityId}, currentMode={currentMode}");
+        
+        // Only handle deletion if we're in Delete mode
+        if (currentMode != MapMode.Delete)
+        {
+            Console.WriteLine($"Not in delete mode, ignoring click. Current mode: {currentMode}");
+            return;
+        }
+
+        try
+        {
+            // Show confirmation dialog
+            var confirmed = await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to delete this {entityType}?");
+            if (!confirmed)
+            {
+                return;
+            }
+
+            // Delete based on entity type
+            switch (entityType.ToLower())
+            {
+                case "vault":
+                    await DeleteVault(entityId);
+                    break;
+                case "midpoint":
+                    await DeleteMidpoint(entityId);
+                    break;
+                case "cable":
+                    await DeleteCable(entityId);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"ERROR deleting {entityType}: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Failed to delete {entityType}. Error: {ex.Message}");
         }
     }
 
@@ -238,6 +315,12 @@ else
         }
 
         currentMode = mode;
+
+        // Update JavaScript delete mode state so click handlers know the current mode
+        if (module != null)
+        {
+            await module.InvokeVoidAsync("setDeleteMode", mode == MapMode.Delete);
+        }
     }
 
     /// <summary>
@@ -250,6 +333,7 @@ else
             MapMode.AddVault => "Click on the map to add a new vault at that location.",
             MapMode.AddMidpoint => "Click on the map to add a new midpoint at that location.",
             MapMode.DrawCable => "Click multiple points on the map to define the cable path. Click 'Finish Cable' when done.",
+            MapMode.Delete => "Click on a vault, midpoint, or cable to delete it.",
             _ => ""
         };
     }
@@ -295,11 +379,12 @@ else
         {
             var createdVault = await response.Content.ReadFromJsonAsync<Vault>(options);
             
-            if (createdVault != null && createdVault.Location != null)
+            if (createdVault != null && createdVault.Location != null && dotNetReference != null)
             {
-                // Add marker to map immediately
+                // Add marker to map immediately and store reference for deletion
                 string popup = $"<b>{createdVault.Name}</b><br>{createdVault.Status}<br><a href='vault/{createdVault.Id}'>View Details</a>";
-                await module.InvokeVoidAsync("addMarker", mapInstance, createdVault.Location.Y, createdVault.Location.X, popup);
+                var markerRef = await module.InvokeAsync<IJSObjectReference>("addMarker", mapInstance, createdVault.Location.Y, createdVault.Location.X, popup, createdVault.Id, dotNetReference);
+                mapLayers[$"vault_{createdVault.Id}"] = markerRef;
 
                 // Refresh the vaults list
                 await LoadVaults();
@@ -347,10 +432,11 @@ else
         {
             var createdMidpoint = await response.Content.ReadFromJsonAsync<Midpoint>(options);
             
-            if (createdMidpoint != null && createdMidpoint.Location != null)
+            if (createdMidpoint != null && createdMidpoint.Location != null && dotNetReference != null)
             {
-                // Add circle to map immediately
-                await module.InvokeVoidAsync("addCircle", mapInstance, createdMidpoint.Location.Y, createdMidpoint.Location.X, createdMidpoint.Color, $"<b>{createdMidpoint.Name}</b>");
+                // Add circle to map immediately and store reference for deletion
+                var circleRef = await module.InvokeAsync<IJSObjectReference>("addCircle", mapInstance, createdMidpoint.Location.Y, createdMidpoint.Location.X, createdMidpoint.Color, $"<b>{createdMidpoint.Name}</b>", createdMidpoint.Id, dotNetReference);
+                mapLayers[$"midpoint_{createdMidpoint.Id}"] = circleRef;
 
                 // Refresh the midpoints list
                 await LoadMidpoints();
@@ -444,13 +530,17 @@ else
                     tempCablePolyline = null;
                 }
 
-                // Draw the saved cable
+                // Draw the saved cable and store reference for deletion
                 var latLngs = new List<object>();
                 foreach (var coord in createdCable.Path.Coordinates)
                 {
                     latLngs.Add(new { lat = coord.Y, lng = coord.X });
                 }
-                await module.InvokeVoidAsync("addPolyline", mapInstance, latLngs, createdCable.Color, $"<b>{createdCable.Name}</b>");
+                if (dotNetReference != null)
+                {
+                    var polylineRef = await module.InvokeAsync<IJSObjectReference>("addPolyline", mapInstance, latLngs, createdCable.Color, $"<b>{createdCable.Name}</b>", createdCable.Id, dotNetReference);
+                    mapLayers[$"cable_{createdCable.Id}"] = polylineRef;
+                }
 
                 // Refresh the cables list
                 await LoadCables();
@@ -504,5 +594,113 @@ else
         var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
         options.Converters.Add(new GeoJsonConverterFactory());
         cables = await Http.GetFromJsonAsync<Cable[]>("api/cables", options);
+    }
+
+    /// <summary>
+    /// Deletes a vault from the database and removes it from the map.
+    /// </summary>
+    /// <param name="vaultId">The unique ID of the vault to delete</param>
+    private async Task DeleteVault(int vaultId)
+    {
+        if (module == null || mapInstance == null) return;
+
+        // Call API to delete the vault
+        var response = await Http.DeleteAsync($"api/vaults/{vaultId}");
+
+        if (response.IsSuccessStatusCode)
+        {
+            // Remove from map
+            var layerKey = $"vault_{vaultId}";
+            if (mapLayers.ContainsKey(layerKey))
+            {
+                await module.InvokeVoidAsync("removeLayer", mapInstance, mapLayers[layerKey]);
+                mapLayers.Remove(layerKey);
+            }
+
+            // Refresh the vaults list
+            await LoadVaults();
+            
+            // Refresh the map display
+            StateHasChanged();
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("alert", "Failed to delete vault. Please try again.");
+        }
+    }
+
+    /// <summary>
+    /// Deletes a midpoint from the database and removes it from the map.
+    /// </summary>
+    /// <param name="midpointId">The unique ID of the midpoint to delete</param>
+    private async Task DeleteMidpoint(int midpointId)
+    {
+        if (module == null || mapInstance == null) return;
+
+        // Call API to delete the midpoint
+        var response = await Http.DeleteAsync($"api/midpoints/{midpointId}");
+
+        if (response.IsSuccessStatusCode)
+        {
+            // Remove from map
+            var layerKey = $"midpoint_{midpointId}";
+            if (mapLayers.ContainsKey(layerKey))
+            {
+                await module.InvokeVoidAsync("removeLayer", mapInstance, mapLayers[layerKey]);
+                mapLayers.Remove(layerKey);
+            }
+
+            // Refresh the midpoints list
+            await LoadMidpoints();
+            
+            // Refresh the map display
+            StateHasChanged();
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("alert", "Failed to delete midpoint. Please try again.");
+        }
+    }
+
+    /// <summary>
+    /// Deletes a cable from the database and removes it from the map.
+    /// </summary>
+    /// <param name="cableId">The unique ID of the cable to delete</param>
+    private async Task DeleteCable(int cableId)
+    {
+        if (module == null || mapInstance == null) return;
+
+        // Call API to delete the cable
+        var response = await Http.DeleteAsync($"api/cables/{cableId}");
+
+        if (response.IsSuccessStatusCode)
+        {
+            // Remove from map
+            var layerKey = $"cable_{cableId}";
+            if (mapLayers.ContainsKey(layerKey))
+            {
+                await module.InvokeVoidAsync("removeLayer", mapInstance, mapLayers[layerKey]);
+                mapLayers.Remove(layerKey);
+            }
+
+            // Refresh the cables list
+            await LoadCables();
+            
+            // Refresh the map display
+            StateHasChanged();
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("alert", "Failed to delete cable. Please try again.");
+        }
+    }
+
+    /// <summary>
+    /// Cleanup method to dispose of resources when the component is destroyed.
+    /// Prevents memory leaks by disposing the DotNetObjectReference.
+    /// </summary>
+    public void Dispose()
+    {
+        dotNetReference?.Dispose();
     }
 }

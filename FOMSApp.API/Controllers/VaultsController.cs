@@ -133,5 +133,41 @@ namespace FOMSApp.API.Controllers
             // nameof(GetVault) prevents typos - the compiler ensures the method name is correct
             return CreatedAtAction(nameof(GetVault), new { id = vault.Id }, vault);
         }
+
+        /// <summary>
+        /// Deletes a vault from the database by its unique identifier.
+        /// Also deletes all associated photos (cascade delete handled by database or explicit deletion).
+        /// </summary>
+        /// <param name="id">The unique ID of the vault to delete (from the URL route)</param>
+        /// <returns>
+        /// HTTP 204 No Content if successfully deleted, or HTTP 404 Not Found if the vault doesn't exist.
+        /// </returns>
+        /// <remarks>
+        /// RESTful Best Practice: DELETE operations typically return 204 No Content (success with no body)
+        /// rather than 200 OK, because there's nothing meaningful to return after deletion.
+        /// 
+        /// Note: This will also delete all photos associated with the vault if cascade delete is configured.
+        /// If not, you may need to explicitly delete photos first to avoid foreign key constraint violations.
+        /// </remarks>
+        // DELETE: api/vaults/5
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteVault(int id)
+        {
+            // Find the vault by primary key
+            var vault = await _context.Vaults.FindAsync(id);
+            
+            // Return 404 if not found (standard REST practice)
+            if (vault == null)
+                return NotFound();
+
+            // Mark the entity for deletion
+            _context.Vaults.Remove(vault);
+            
+            // Execute the SQL DELETE statement
+            await _context.SaveChangesAsync();
+            
+            // Return 204 No Content (successful deletion with no response body)
+            return NoContent();
+        }
     }
 }
