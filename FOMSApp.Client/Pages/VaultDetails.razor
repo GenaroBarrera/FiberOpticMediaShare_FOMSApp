@@ -209,8 +209,9 @@ else
             using var content = new MultipartFormDataContent();
 
             // We must resize/limit the file stream to prevent massive uploads crashing the browser
-            // Allow up to 5MB
-            var fileContent = new StreamContent(selectedFile.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024));
+            // Allow up to 20MB (20 * 1024 * 1024 bytes) - reasonable for high-resolution construction photos
+            // This limit prevents browser memory issues while allowing quality photos
+            var fileContent = new StreamContent(selectedFile.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024));
             fileContent.Headers.ContentType = new MediaTypeHeaderValue(selectedFile.ContentType);
 
             content.Add(content: fileContent, name: "file", fileName: selectedFile.Name);
