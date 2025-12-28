@@ -44,8 +44,18 @@ else
                     <p class="mb-0">@(vault?.Description ?? "No description provided.")</p>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label"><strong>Location ID:</strong></label>
-                    <p class="mb-0">@(vault?.Id ?? 0)</p>
+                    <label class="form-label"><strong>Coordinates:</strong></label>
+                    <p class="mb-0">
+                        @if (vault?.Location != null)
+                        {
+                            @($"{vault.Location.Y:F6}, {vault.Location.X:F6}")
+                            <small class="text-muted ms-2">(Lat, Lng)</small>
+                        }
+                        else
+                        {
+                            <span class="text-muted">No location set</span>
+                        }
+                    </p>
                 </div>
                 <button type="button" class="btn btn-primary" @onclick="StartEditing">Edit Vault</button>
             }
@@ -76,8 +86,18 @@ else
                         <ValidationMessage For="@(() => editModel.Description)" />
                     </div>
                     <div class="mb-3">
-                        <label class="form-label"><strong>Location ID:</strong></label>
-                        <p class="mb-0 text-muted">@(vault?.Id ?? 0) (cannot be changed)</p>
+                        <label class="form-label"><strong>Coordinates:</strong></label>
+                        <p class="mb-0 text-muted">
+                            @if (vault?.Location != null)
+                            {
+                                @($"{vault.Location.Y:F6}, {vault.Location.X:F6}")
+                                <small class="ms-2">(Lat, Lng - cannot be changed)</small>
+                            }
+                            else
+                            {
+                                <span>No location set (cannot be changed)</span>
+                            }
+                        </p>
                     </div>
                     <div class="btn-group">
                         <button type="submit" class="btn btn-primary" disabled="@isSaving">
