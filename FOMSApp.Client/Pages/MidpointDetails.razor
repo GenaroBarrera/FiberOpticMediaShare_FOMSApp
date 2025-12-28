@@ -1,7 +1,9 @@
 @page "/midpoint/{Id:int}"
 @using FOMSApp.Shared.Models
 @using System.Text.Json
+@using System.Net.Http.Headers
 @using NetTopologySuite.IO.Converters
+@using Microsoft.JSInterop
 @inject HttpClient Http
 @inject IJSRuntime JS
 
@@ -89,11 +91,98 @@ else
             }
         </div>
     </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h4>Photos</h4>
+        </div>
+        <div class="card-body">
+
+            <div class="mb-3">
+                <label>Select a photo to upload:</label>
+                <div class="input-group">
+                    <InputFile OnChange="@OnFileSelected" class="form-control" accept=".jpg,.jpeg,.png" @ref="fileInput" />
+                </div>
+                @if (selectedFile != null)
+                {
+                    <div class="mt-2">
+                        <p class="mb-2">
+                            <strong>Selected file:</strong> @selectedFile.Name 
+                            <span class="text-muted">(@(selectedFile.Size / 1024) KB)</span>
+                        </p>
+                        <button type="button" class="btn btn-primary" @onclick="UploadSelectedPhoto" disabled="@(isUploading)">
+                            @if (isUploading)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                <text>Uploading...</text>
+                            }
+                            else
+                            {
+                                <text>Upload Photo</text>
+                            }
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary ms-2" @onclick="ClearSelectedFile">Cancel</button>
+                    </div>
+                }
+            </div>
+
+            <hr />
+
+            @if (photos == null)
+            {
+                <p>Loading photos...</p>
+            }
+            else if (photos.Count == 0)
+            {
+                <p class="text-muted">No photos uploaded yet.</p>
+            }
+            else
+            {
+                <div class="row">
+                    @foreach (var photo in photos)
+                    {
+                        <div class="col-md-4 mb-3">
+                            <div class="card h-100">
+                                <img src="@($"{Http.BaseAddress}uploads/{photo.FileName}")" class="card-img-top" alt="Midpoint Photo"
+                                    style="max-height: 200px; object-fit: cover; cursor: pointer;"
+                                    @onclick="() => OpenPhoto(photo.FileName)">
+                                <div class="card-body">
+                                    <small class="text-muted">Uploaded: @photo.UploadedAt.ToShortDateString()</small>
+                                    <div class="mt-2">
+                                        <button type="button" class="btn btn-sm btn-danger" @onclick="() => DeletePhoto(photo.Id)" @onclick:stopPropagation="true">
+                                            Delete Photo
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (selectedPhotoUrl != null) // Show the zoomed-in photo
+    {
+        <div class="modal-backdrop"
+            style="background-color: rgba(0,0,0,0.9); position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1050; display: flex; justify-content: center; align-items: center;"
+            @onclick="ClosePhoto">
+            <div style="position: relative; max-width: 90%; max-height: 90%;">
+                <img src="@selectedPhotoUrl"
+                    style="max-width: 100%; max-height: 90vh; border: 2px solid white; box-shadow: 0 0 20px black;" />
+
+                <button class="btn btn-danger" style="position: absolute; top: -40px; right: 0;" @onclick="ClosePhoto">Close
+                    X</button>
+            </div>
+        </div>
+    }
 }
 
 @code {
     [Parameter] public int Id { get; set; }
     private Midpoint? midpoint;
+    private List<Photo>? photos;
+    private string? selectedPhotoUrl; // Holds the URL of the photo we want to zoom in on
     
     /// <summary>
     /// Indicates whether the midpoint details are currently being edited.
@@ -114,9 +203,28 @@ else
     /// </summary>
     private MidpointEditModel? editModel;
 
+    /// <summary>
+    /// Reference to the file input element. Used to reset it after successful upload
+    /// so users can upload multiple photos without page refresh.
+    /// </summary>
+    private InputFile? fileInput;
+
+    /// <summary>
+    /// Stores the currently selected file before upload.
+    /// This allows users to browse and select a file, then upload it with a separate button.
+    /// </summary>
+    private IBrowserFile? selectedFile;
+
+    /// <summary>
+    /// Indicates whether a photo upload is currently in progress.
+    /// Used to disable the upload button and show a loading spinner during upload.
+    /// </summary>
+    private bool isUploading = false;
+
     protected override async Task OnInitializedAsync()
     {
         await LoadMidpoint();
+        await LoadPhotos();
     }
 
     /// <summary>
@@ -127,6 +235,32 @@ else
         var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
         options.Converters.Add(new GeoJsonConverterFactory());
         midpoint = await Http.GetFromJsonAsync<Midpoint>($"api/midpoints/{Id}", options);
+    }
+
+    /// <summary>
+    /// Loads all photos associated with this midpoint from the API.
+    /// </summary>
+    private async Task LoadPhotos()
+    {
+        // Fetch the list of photos for this specific midpoint
+        photos = await Http.GetFromJsonAsync<List<Photo>>($"api/photos/midpoint/{Id}");
+    }
+
+    /// <summary>
+    /// Opens a photo in a larger view by setting the selectedPhotoUrl.
+    /// </summary>
+    /// <param name="fileName">The filename of the photo to display</param>
+    private void OpenPhoto(string fileName)
+    {
+        selectedPhotoUrl = $"{Http.BaseAddress}uploads/{fileName}";
+    }
+
+    /// <summary>
+    /// Closes the larger photo view by clearing the selectedPhotoUrl.
+    /// </summary>
+    private void ClosePhoto()
+    {
+        selectedPhotoUrl = null;
     }
 
     /// <summary>
@@ -241,6 +375,123 @@ else
         {
             isSaving = false;
             StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Handles file selection when the user browses for a file.
+    /// Stores the selected file but does not upload it yet.
+    /// </summary>
+    /// <param name="e">Event arguments containing the selected file</param>
+    private void OnFileSelected(InputFileChangeEventArgs e)
+    {
+        // Store the selected file for later upload
+        selectedFile = e.File;
+        
+        // Trigger UI update to show the selected file name
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Clears the selected file without uploading it.
+    /// Allows users to cancel and select a different file.
+    /// </summary>
+    private void ClearSelectedFile()
+    {
+        selectedFile = null;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Uploads the previously selected photo file to the server.
+    /// This method is called when the user clicks the "Upload Photo" button.
+    /// </summary>
+    private async Task UploadSelectedPhoto()
+    {
+        if (selectedFile == null)
+        {
+            return;
+        }
+
+        isUploading = true;
+        StateHasChanged();
+
+        try
+        {
+            // Create a specialized "content" container for sending files
+            using var content = new MultipartFormDataContent();
+
+            // We must resize/limit the file stream to prevent massive uploads crashing the browser
+            // Allow up to 20MB (20 * 1024 * 1024 bytes) - reasonable for high-resolution construction photos
+            // This limit prevents browser memory issues while allowing quality photos
+            var fileContent = new StreamContent(selectedFile.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024));
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue(selectedFile.ContentType);
+
+            content.Add(content: fileContent, name: "file", fileName: selectedFile.Name);
+            content.Add(content: new StringContent(Id.ToString()), name: "midpointId");
+
+            // Send to API
+            var response = await Http.PostAsync("api/photos", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Clear the selected file
+                selectedFile = null;
+                
+                // Refresh the list so the new photo appears instantly
+                await LoadPhotos();
+            }
+            else
+            {
+                var errorMessage = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Upload failed: {errorMessage}");
+                await JS.InvokeVoidAsync("alert", $"Upload failed: {errorMessage}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error uploading photo: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Error uploading photo: {ex.Message}");
+        }
+        finally
+        {
+            isUploading = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Deletes a photo from the database and removes it from the display.
+    /// </summary>
+    /// <param name="photoId">The unique ID of the photo to delete</param>
+    private async Task DeletePhoto(int photoId)
+    {
+        // Show confirmation dialog
+        var confirmed = await JS.InvokeAsync<bool>("confirm", "Are you sure you want to delete this photo? This action cannot be undone.");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        try
+        {
+            // Call API to delete the photo
+            var response = await Http.DeleteAsync($"api/photos/{photoId}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Refresh the photos list to remove the deleted photo from the display
+                await LoadPhotos();
+            }
+            else
+            {
+                await JS.InvokeAsync<string>("alert", "Failed to delete photo. Please try again.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting photo: {ex.Message}");
+            await JS.InvokeAsync<string>("alert", $"Error deleting photo: {ex.Message}");
         }
     }
 

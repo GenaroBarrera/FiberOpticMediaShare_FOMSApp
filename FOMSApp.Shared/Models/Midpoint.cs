@@ -61,5 +61,19 @@ namespace FOMSApp.Shared.Models
         /// enabling spatial queries and accurate distance calculations.
         /// </summary>
         public Point? Location { get; set; }
+
+        /// <summary>
+        /// Navigation Property: Collection of all photos associated with this midpoint.
+        /// This creates a one-to-many relationship in the database (one Midpoint can have many Photos).
+        /// 
+        /// Entity Framework uses this property to:
+        /// 1. Create a foreign key (MidpointId) in the Photos table
+        /// 2. Enable eager loading with .Include(m => m.Photos)
+        /// 3. Allow navigation from a Midpoint to its Photos: midpoint.Photos
+        /// 
+        /// Initialized as an empty list to prevent null reference exceptions.
+        /// The list is automatically populated when you use .Include() in queries.
+        /// </summary>
+        public List<Photo> Photos { get; set; } = new();
     }
 }

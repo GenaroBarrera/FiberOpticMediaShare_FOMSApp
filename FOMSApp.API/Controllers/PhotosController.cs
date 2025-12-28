@@ -7,12 +7,14 @@ namespace FOMSApp.API.Controllers
 {
     /// <summary>
     /// RESTful API controller for managing Photo entities and file uploads.
-    /// Handles HTTP requests for uploading photos and retrieving photos for specific vaults.
+    /// Handles HTTP requests for uploading photos and retrieving photos for specific vaults or midpoints.
     /// </summary>
     /// <remarks>
     /// Endpoints:
     /// - GET /api/photos/vault/{vaultId} - Get all photos for a specific vault
-    /// - POST /api/photos - Upload a new photo file
+    /// - GET /api/photos/midpoint/{midpointId} - Get all photos for a specific midpoint
+    /// - POST /api/photos - Upload a new photo file (for vault or midpoint)
+    /// - DELETE /api/photos/{id} - Delete a photo
     /// </remarks>
     [Route("api/[controller]")]
     [ApiController]
@@ -69,6 +71,30 @@ namespace FOMSApp.API.Controllers
         }
 
         /// <summary>
+        /// Retrieves all photos associated with a specific midpoint.
+        /// </summary>
+        /// <param name="midpointId">The unique ID of the midpoint whose photos should be retrieved</param>
+        /// <returns>
+        /// HTTP 200 OK with a list of Photo objects (metadata only - file names, not the actual image bytes).
+        /// Returns an empty list if the midpoint has no photos.
+        /// </returns>
+        /// <remarks>
+        /// This endpoint returns Photo records (database metadata), not the actual image files.
+        /// The frontend constructs URLs like: /uploads/{FileName} to display the images.
+        /// 
+        /// Using .Where() filters the photos in the database query (efficient - only matching rows are returned).
+        /// </remarks>
+        // GET: api/photos/midpoint/5
+        [HttpGet("midpoint/{midpointId}")] // Custom route: /api/photos/midpoint/{midpointId}
+        public async Task<ActionResult<IEnumerable<Photo>>> GetPhotosForMidpoint(int midpointId)
+        {
+            // Filter photos by MidpointId - Entity Framework translates this to SQL WHERE clause
+            return await _context.Photos
+                .Where(p => p.MidpointId == midpointId) // LINQ expression translated to SQL: WHERE MidpointId = @midpointId
+                .ToListAsync();
+        }
+
+        /// <summary>
         /// Uploads a photo file and creates a Photo record in the database.
         /// </summary>
         /// <param name="upload">
@@ -102,6 +128,13 @@ namespace FOMSApp.API.Controllers
             if (upload.File == null || upload.File.Length == 0)
                 return BadRequest("No file uploaded.");
 
+            // Validation: Ensure either VaultId or MidpointId is provided (but not both)
+            if ((upload.VaultId.HasValue && upload.MidpointId.HasValue) || 
+                (!upload.VaultId.HasValue && !upload.MidpointId.HasValue))
+            {
+                return BadRequest("Either VaultId or MidpointId must be provided, but not both.");
+            }
+
             // Determine the upload directory path (typically: wwwroot/uploads)
             // WebRootPath points to the wwwroot folder in your project
             string uploadPath = Path.Combine(_env.WebRootPath, "uploads");
@@ -134,7 +167,8 @@ namespace FOMSApp.API.Controllers
             var photo = new Photo
             {
                 FileName = uniqueFileName, // Store the GUID-based filename
-                VaultId = upload.VaultId, // Link to the parent vault
+                VaultId = upload.VaultId, // Link to the parent vault (nullable)
+                MidpointId = upload.MidpointId, // Link to the parent midpoint (nullable)
                 UploadedAt = DateTime.Now // Record when the upload occurred
             };
 
@@ -205,7 +239,7 @@ namespace FOMSApp.API.Controllers
 
     /// <summary>
     /// Data Transfer Object (DTO) for photo uploads.
-    /// Wraps the file and vault ID together in a single object that ASP.NET Core can deserialize.
+    /// Wraps the file and entity ID (vault or midpoint) together in a single object that ASP.NET Core can deserialize.
     /// </summary>
     /// <remarks>
     /// Why use a DTO instead of Photo?
@@ -215,14 +249,24 @@ namespace FOMSApp.API.Controllers
     /// 
     /// The [FromForm] attribute in the controller tells ASP.NET Core to bind this from multipart/form-data,
     /// which is the format browsers use when submitting files via HTML forms.
+    /// 
+    /// Note: Either VaultId OR MidpointId must be provided, but not both.
     /// </remarks>
     public class PhotoUploadDto
     {
         /// <summary>
-        /// The ID of the vault this photo belongs to.
-        /// Must match an existing Vault.Id in the database.
+        /// The ID of the vault this photo belongs to (optional).
+        /// Must match an existing Vault.Id in the database if provided.
+        /// Either VaultId or MidpointId must be set, but not both.
         /// </summary>
-        public int VaultId { get; set; }
+        public int? VaultId { get; set; }
+
+        /// <summary>
+        /// The ID of the midpoint this photo belongs to (optional).
+        /// Must match an existing Midpoint.Id in the database if provided.
+        /// Either VaultId or MidpointId must be set, but not both.
+        /// </summary>
+        public int? MidpointId { get; set; }
 
         /// <summary>
         /// The uploaded image file from the HTTP request.
