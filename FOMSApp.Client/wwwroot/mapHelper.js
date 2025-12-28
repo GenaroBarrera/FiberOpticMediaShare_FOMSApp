@@ -83,15 +83,59 @@ export function addMarker(map, lat, lng, popupText, entityId, dotNetReference, c
     return marker;
 }
 
+// Function to create a custom colored icon for midpoint markers
+// Returns a Leaflet DivIcon configured with the specified color
+// Midpoints use a square/diamond shape to distinguish them from vault pin markers
+function createColoredMidpointIcon(color) {
+    // Map color names to hex values for better browser compatibility
+    var colorMap = {
+        'Black': '#000000',
+        'LightGray': '#D3D3D3',
+        'LightGreen': '#90EE90',
+        'LightCoral': '#F08080'
+    };
+    
+    // Get hex color or use the provided color if it's already a hex code
+    var hexColor = colorMap[color] || color || '#000000';
+    
+    // Create an SVG square/diamond marker with the specified color
+    // This creates a distinct shape from vault pins (which are circular pins)
+    var svgIcon = '<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">' +
+        // Diamond/square shape rotated 45 degrees
+        '<rect x="5" y="5" width="10" height="10" transform="rotate(45 10 10)" ' +
+        'fill="' + hexColor + '" stroke="white" stroke-width="2"/>' +
+        '</svg>';
+    
+    return L.divIcon({
+        html: svgIcon,
+        className: 'custom-colored-midpoint-marker', // Custom class for styling
+        iconSize: [20, 20],
+        iconAnchor: [10, 10], // Anchor point at the center
+        popupAnchor: [0, -10] // Position popup above the marker
+    });
+}
+
 // Function to add a small circle marker (Dot)
 // Returns the circle marker so it can be stored and deleted later
+// Updated to use custom colored icons based on status
 export function addCircle(map, lat, lng, color, popupText, entityId, dotNetReference) {
-    var circleMarker = L.circleMarker([lat, lng], {
-        color: 'black',       // Border color
-        fillColor: color,     // Inside color (e.g., 'green')
-        fillOpacity: 0.8,
-        radius: 6             // Size of the dot (smaller than a pin)
-    }).addTo(map);
+    // Create a custom colored icon if color is provided, otherwise use default circle marker
+    var icon = color ? createColoredMidpointIcon(color) : undefined;
+    
+    // Use circle marker if no custom icon, otherwise use marker with custom icon
+    var circleMarker;
+    if (icon) {
+        // Use marker with custom icon for better visual distinction
+        circleMarker = L.marker([lat, lng], { icon: icon }).addTo(map);
+    } else {
+        // Fallback to circle marker if no color specified
+        circleMarker = L.circleMarker([lat, lng], {
+            color: 'black',       // Border color
+            fillColor: color || 'green',     // Inside color
+            fillOpacity: 0.8,
+            radius: 6             // Size of the dot
+        }).addTo(map);
+    }
 
     if (popupText) {
         circleMarker.bindPopup(popupText);

@@ -1,0 +1,275 @@
+@page "/midpoint/{Id:int}"
+@using FOMSApp.Shared.Models
+@using System.Text.Json
+@using NetTopologySuite.IO.Converters
+@inject HttpClient Http
+@inject IJSRuntime JS
+
+<PageTitle>Midpoint Details</PageTitle>
+
+@if (midpoint == null)
+{
+    <p><em>Loading details...</em></p>
+}
+else
+{
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h2 class="mb-0">Midpoint Details</h2>
+            <a href="/" class="btn btn-light btn-sm">Back to Map</a>
+        </div>
+        <div class="card-body">
+            @if (!isEditing)
+            {
+                <!-- View Mode -->
+                <div class="mb-3">
+                    <label class="form-label"><strong>Name:</strong></label>
+                    <p class="mb-0">@(midpoint?.Name ?? "Unknown")</p>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label"><strong>Status:</strong></label>
+                    <p class="mb-0">
+                        <span class="badge bg-@GetStatusBadgeColor(midpoint?.Status ?? MidpointStatus.New)">@midpoint?.Status</span>
+                    </p>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label"><strong>Description:</strong></label>
+                    <p class="mb-0">@(midpoint?.Description ?? "No description provided.")</p>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label"><strong>Location ID:</strong></label>
+                    <p class="mb-0">@(midpoint?.Id ?? 0)</p>
+                </div>
+                <button type="button" class="btn btn-primary" @onclick="StartEditing">Edit Midpoint</button>
+            }
+            else if (editModel != null)
+            {
+                <!-- Edit Mode -->
+                <EditForm Model="@editModel" OnValidSubmit="@SaveMidpoint">
+                    <DataAnnotationsValidator />
+                    <div class="mb-3">
+                        <label for="midpointName" class="form-label"><strong>Name:</strong></label>
+                        <InputText id="midpointName" class="form-control" @bind-Value="editModel.Name" />
+                        <ValidationMessage For="@(() => editModel.Name)" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="midpointStatus" class="form-label"><strong>Status:</strong></label>
+                        <InputSelect id="midpointStatus" class="form-select" @bind-Value="editModel.Status">
+                            <option value="@MidpointStatus.New">New</option>
+                            <option value="@MidpointStatus.Review">Review</option>
+                            <option value="@MidpointStatus.Complete">Complete</option>
+                            <option value="@MidpointStatus.Issue">Issue</option>
+                        </InputSelect>
+                        <ValidationMessage For="@(() => editModel.Status)" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="midpointDescription" class="form-label"><strong>Description:</strong></label>
+                        <InputTextArea id="midpointDescription" class="form-control" rows="4" @bind-Value="editModel.Description" placeholder="Enter a brief description or notes about this midpoint..." />
+                        <ValidationMessage For="@(() => editModel.Description)" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label"><strong>Location ID:</strong></label>
+                        <p class="mb-0 text-muted">@(midpoint?.Id ?? 0) (cannot be changed)</p>
+                    </div>
+                    <div class="btn-group">
+                        <button type="submit" class="btn btn-primary" disabled="@isSaving">
+                            @if (isSaving)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                <text>Saving...</text>
+                            }
+                            else
+                            {
+                                <text>Save Changes</text>
+                            }
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" @onclick="CancelEditing" disabled="@isSaving">Cancel</button>
+                    </div>
+                </EditForm>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private Midpoint? midpoint;
+    
+    /// <summary>
+    /// Indicates whether the midpoint details are currently being edited.
+    /// When true, the UI switches from view mode to edit mode (form fields).
+    /// </summary>
+    private bool isEditing = false;
+
+    /// <summary>
+    /// Indicates whether a midpoint update is currently in progress.
+    /// Used to disable the save button and show a loading spinner during save.
+    /// </summary>
+    private bool isSaving = false;
+
+    /// <summary>
+    /// Temporary model used for editing midpoint properties.
+    /// This allows users to make changes without modifying the original midpoint object
+    /// until they click "Save Changes". If they cancel, the original values are preserved.
+    /// </summary>
+    private MidpointEditModel? editModel;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMidpoint();
+    }
+
+    /// <summary>
+    /// Loads the midpoint details from the API.
+    /// </summary>
+    private async Task LoadMidpoint()
+    {
+        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        options.Converters.Add(new GeoJsonConverterFactory());
+        midpoint = await Http.GetFromJsonAsync<Midpoint>($"api/midpoints/{Id}", options);
+    }
+
+    /// <summary>
+    /// Gets the Bootstrap badge color class based on the midpoint status.
+    /// Used to visually distinguish different statuses in the UI.
+    /// Maps status colors: New (black), Review (light gray), Complete (light green), Issue (light red).
+    /// </summary>
+    /// <param name="status">The midpoint status to get the color for</param>
+    /// <returns>A Bootstrap color class name or custom CSS class for colors not in Bootstrap</returns>
+    private string GetStatusBadgeColor(MidpointStatus status)
+    {
+        return status switch
+        {
+            MidpointStatus.New => "dark",              // Black
+            MidpointStatus.Review => "secondary",      // Light Gray
+            MidpointStatus.Complete => "success",      // Light Green (using success as closest Bootstrap option)
+            MidpointStatus.Issue => "danger",          // Light Red (using danger as closest Bootstrap option)
+            _ => "dark"                                // Default to black
+        };
+    }
+
+    /// <summary>
+    /// Switches the UI from view mode to edit mode.
+    /// Creates a copy of the current midpoint data for editing, allowing users to modify
+    /// properties without affecting the original until they save.
+    /// </summary>
+    private void StartEditing()
+    {
+        if (midpoint == null) return;
+
+        // Create a copy of the midpoint data for editing
+        editModel = new MidpointEditModel
+        {
+            Id = midpoint.Id,
+            Name = midpoint.Name ?? string.Empty,
+            Status = midpoint.Status,
+            Description = midpoint.Description ?? string.Empty
+        };
+
+        isEditing = true;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Cancels editing and returns to view mode without saving changes.
+    /// Discards any modifications made to the editModel.
+    /// </summary>
+    private void CancelEditing()
+    {
+        isEditing = false;
+        editModel = null;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Saves the edited midpoint properties to the server.
+    /// Called when the user submits the edit form (clicks "Save Changes").
+    /// </summary>
+    private async Task SaveMidpoint()
+    {
+        if (editModel == null || midpoint == null)
+        {
+            return;
+        }
+
+        isSaving = true;
+        StateHasChanged();
+
+        try
+        {
+            // Create a Midpoint object with the updated properties
+            // Note: We preserve the Location property from the original midpoint
+            var updatedMidpoint = new Midpoint
+            {
+                Id = editModel.Id,
+                Name = editModel.Name,
+                Status = editModel.Status,
+                Description = string.IsNullOrWhiteSpace(editModel.Description) ? null : editModel.Description,
+                Location = midpoint.Location // Preserve the original location
+                // Note: Color will be automatically set by the API based on Status
+            };
+
+            // Serialize with GeoJSON support for the Location property
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            options.Converters.Add(new GeoJsonConverterFactory());
+
+            // Send PUT request to update the midpoint
+            var response = await Http.PutAsJsonAsync($"api/midpoints/{editModel.Id}", updatedMidpoint, options);
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Reload the midpoint from the server to get the latest data
+                await LoadMidpoint();
+                
+                // Exit edit mode
+                isEditing = false;
+                editModel = null;
+            }
+            else
+            {
+                var errorMessage = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Update failed: {errorMessage}");
+                await JS.InvokeVoidAsync("alert", $"Failed to update midpoint: {errorMessage}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating midpoint: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Error updating midpoint: {ex.Message}");
+        }
+        finally
+        {
+            isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Data model used for editing midpoint properties in the form.
+    /// This is separate from the Midpoint model to allow validation and prevent
+    /// accidentally modifying properties that shouldn't be edited (like Location).
+    /// </summary>
+    private class MidpointEditModel
+    {
+        /// <summary>
+        /// The unique identifier of the midpoint being edited.
+        /// </summary>
+        public int Id { get; set; }
+
+        /// <summary>
+        /// The midpoint name. Required field for identification.
+        /// </summary>
+        public string Name { get; set; } = string.Empty;
+
+        /// <summary>
+        /// The current workflow status of the midpoint.
+        /// </summary>
+        public MidpointStatus Status { get; set; }
+
+        /// <summary>
+        /// Optional description or notes about the midpoint.
+        /// Can be null or empty if no description is provided.
+        /// </summary>
+        public string? Description { get; set; }
+    }
+}

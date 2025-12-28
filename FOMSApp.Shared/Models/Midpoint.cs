@@ -29,10 +29,25 @@ namespace FOMSApp.Shared.Models
         /// Color used to render the midpoint circle on the map.
         /// Can be a CSS color name (e.g., "Green", "Red", "Yellow") or hex code (e.g., "#00FF00").
         /// 
-        /// Default is "Green" - commonly used for standard midpoints.
-        /// Different colors can indicate different types of midpoints or their status.
+        /// Default is "Black" - corresponds to the "New" status.
+        /// The color is automatically set based on the Status property.
+        /// Different colors indicate different workflow statuses.
         /// </summary>
-        public string Color { get; set; } = "Green";
+        public string Color { get; set; } = "Black";
+
+        /// <summary>
+        /// Current workflow status of the midpoint (New, Review, Complete, Issue).
+        /// This drives the visual indicator (color) on the map.
+        /// Defaults to New (Black) when a new midpoint marker is placed.
+        /// </summary>
+        public MidpointStatus Status { get; set; } = MidpointStatus.New;
+
+        /// <summary>
+        /// Optional description or comments about the midpoint.
+        /// Used to store notes, observations, or additional context about the midpoint's condition or location.
+        /// Can be edited by users on the midpoint details page.
+        /// </summary>
+        public string? Description { get; set; }
 
         /// <summary>
         /// Geographic coordinates (latitude/longitude) of the midpoint's location.

@@ -145,3 +145,9 @@ code {
     background: transparent;
     border: none;
 }
+
+/* Remove default Leaflet marker styles for custom colored midpoint markers */
+.custom-colored-midpoint-marker {
+    background: transparent;
+    border: none;
+}
