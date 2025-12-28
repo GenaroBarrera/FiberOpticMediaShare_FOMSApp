@@ -178,6 +178,10 @@ namespace FOMSApp.API.Controllers
             existingVault.Name = vault.Name;
             existingVault.Status = vault.Status;
             existingVault.Description = vault.Description;
+            
+            // Update Color property to match the new Status
+            existingVault.Color = GetStatusColor(vault.Status);
+            
             // Note: Location is NOT updated - vaults cannot be moved after creation
 
             // Mark the entity as modified so Entity Framework knows to update it
@@ -236,6 +240,25 @@ namespace FOMSApp.API.Controllers
             
             // Return 204 No Content (successful deletion with no response body)
             return NoContent();
+        }
+
+        /// <summary>
+        /// Helper method to get the color name string based on the vault status.
+        /// Maps status colors: New (blue), Pending (brown), Review (gray), Complete (green), Issue (red).
+        /// </summary>
+        /// <param name="status">The vault status to get the color for</param>
+        /// <returns>A color name string that matches the status marker color</returns>
+        private static string GetStatusColor(VaultStatus status)
+        {
+            return status switch
+            {
+                VaultStatus.New => "Blue",
+                VaultStatus.Pending => "Brown",
+                VaultStatus.Review => "Gray",
+                VaultStatus.Complete => "Green",
+                VaultStatus.Issue => "Red",
+                _ => "Blue" // Default to blue
+            };
         }
     }
 }

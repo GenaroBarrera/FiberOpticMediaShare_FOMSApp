@@ -133,3 +133,15 @@ code {
         margin-right: -0.5rem; /* Makes effective right offset = 1.5rem + 0.5rem = 2rem to match left */
     }
 }
+
+/* Custom badge color for "Pending" status (brown) */
+.badge-brown {
+    background-color: #8B4513; /* SaddleBrown color */
+    color: white;
+}
+
+/* Remove default Leaflet marker styles for custom colored markers */
+.custom-colored-marker {
+    background: transparent;
+    border: none;
+}

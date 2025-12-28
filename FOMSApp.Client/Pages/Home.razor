@@ -1,4 +1,4 @@
-﻿@page "/"
+@page "/"
 @using FOMSApp.Shared.Models
 @using Microsoft.JSInterop
 @using System.Text.Json
@@ -160,7 +160,8 @@ else
                     if (vault.Location != null)
                     {
                         string popup = $"<b>{vault.Name}</b><br>{vault.Status}<br><a href='vault/{vault.Id}'>View Details</a>";
-                        var markerRef = await module.InvokeAsync<IJSObjectReference>("addMarker", mapInstance, vault.Location.Y, vault.Location.X, popup, vault.Id, dotNetReference);
+                        // Pass the vault's Color property to display the marker in the correct status color
+                        var markerRef = await module.InvokeAsync<IJSObjectReference>("addMarker", mapInstance, vault.Location.Y, vault.Location.X, popup, vault.Id, dotNetReference, vault.Color);
                         mapLayers[$"vault_{vault.Id}"] = markerRef;
                     }
                 }
@@ -364,8 +365,8 @@ else
         {
             Name = vaultName,
             Location = location,
-            Status = VaultStatus.Pending,
-            Color = "Blue"
+            Status = VaultStatus.New, // New vaults start as "New" (blue)
+            Color = GetStatusColor(VaultStatus.New) // Set color based on status
         };
 
         // Serialize with GeoJSON support
@@ -383,7 +384,8 @@ else
             {
                 // Add marker to map immediately and store reference for deletion
                 string popup = $"<b>{createdVault.Name}</b><br>{createdVault.Status}<br><a href='vault/{createdVault.Id}'>View Details</a>";
-                var markerRef = await module.InvokeAsync<IJSObjectReference>("addMarker", mapInstance, createdVault.Location.Y, createdVault.Location.X, popup, createdVault.Id, dotNetReference);
+                // Pass the vault's Color property to display the marker in the correct status color
+                var markerRef = await module.InvokeAsync<IJSObjectReference>("addMarker", mapInstance, createdVault.Location.Y, createdVault.Location.X, popup, createdVault.Id, dotNetReference, createdVault.Color);
                 mapLayers[$"vault_{createdVault.Id}"] = markerRef;
 
                 // Refresh the vaults list
@@ -693,6 +695,26 @@ else
         {
             await JS.InvokeVoidAsync("alert", "Failed to delete cable. Please try again.");
         }
+    }
+
+    /// <summary>
+    /// Gets the color name string based on the vault status.
+    /// Used to set the Color property when creating or updating vaults.
+    /// Maps status colors: New (blue), Pending (brown), Review (gray), Complete (green), Issue (red).
+    /// </summary>
+    /// <param name="status">The vault status to get the color for</param>
+    /// <returns>A color name string (e.g., "Blue", "Brown", "Gray", "Green", "Red")</returns>
+    private string GetStatusColor(VaultStatus status)
+    {
+        return status switch
+        {
+            VaultStatus.New => "Blue",
+            VaultStatus.Pending => "Brown",
+            VaultStatus.Review => "Gray",
+            VaultStatus.Complete => "Green",
+            VaultStatus.Issue => "Red",
+            _ => "Blue" // Default to blue
+        };
     }
 
     /// <summary>

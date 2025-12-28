@@ -26,19 +26,19 @@ namespace FOMSApp.API.Data
                     Name = "V-101 (Downtown)",
                     // Note: Coordinates are Longitude (X), Latitude (Y)
                     Location = geometryFactory.CreatePoint(new Coordinate(-97.7431, 30.2672)), 
-                    Status = VaultStatus.Pending
+                    Status = VaultStatus.New // Blue - new pin marker placed
                 },
                 new Vault
                 {
                     Name = "V-102 (North Route)",
                     Location = geometryFactory.CreatePoint(new Coordinate(-97.7445, 30.2685)),
-                    Status = VaultStatus.Review // Yellow
+                    Status = VaultStatus.Pending // Brown - photos are pending
                 },
-                 new Vault
+                new Vault
                 {
                     Name = "V-103 (Completed)",
                     Location = geometryFactory.CreatePoint(new Coordinate(-97.7410, 30.2660)),
-                    Status = VaultStatus.Complete // Green
+                    Status = VaultStatus.Complete // Green - photos are complete
                 }
             };
 

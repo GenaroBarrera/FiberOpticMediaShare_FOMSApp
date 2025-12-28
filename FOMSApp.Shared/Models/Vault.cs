@@ -31,11 +31,11 @@ namespace FOMSApp.Shared.Models
         public string Color { get; set; } = "Blue";
 
         /// <summary>
-        /// Current workflow status of the vault (Pending, Review, Complete, Rejected).
+        /// Current workflow status of the vault (New, Pending, Review, Complete, Issue).
         /// This drives the visual indicator (color) on the map and determines if photos should be synced to Google Drive.
-        /// Defaults to Pending (Gray) when a new vault is created.
+        /// Defaults to New (Blue) when a new vault pin marker is placed.
         /// </summary>
-        public VaultStatus Status { get; set; } = VaultStatus.Pending;
+        public VaultStatus Status { get; set; } = VaultStatus.New;
 
         /// <summary>
         /// Optional description or comments about the vault.

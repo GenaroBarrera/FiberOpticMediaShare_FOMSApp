@@ -22,10 +22,46 @@ export function initMap(elementId) {
     return map; // Return the map object to C#
 }
 
-// Function to add a marker to the map
+// Function to create a custom colored icon for vault markers
+// Returns a Leaflet DivIcon configured with the specified color
+function createColoredIcon(color) {
+    // Map color names to hex values for better browser compatibility
+    var colorMap = {
+        'Blue': '#0066CC',
+        'Brown': '#8B4513',
+        'Gray': '#808080',
+        'Green': '#28A745',
+        'Red': '#DC3545'
+    };
+    
+    // Get hex color or use the provided color if it's already a hex code
+    var hexColor = colorMap[color] || color || '#0066CC';
+    
+    // Create an SVG pin marker with the specified color
+    // This creates a classic map pin shape: circular head with a triangular point
+    var svgIcon = '<svg width="25" height="35" viewBox="0 0 25 35" xmlns="http://www.w3.org/2000/svg">' +
+        // Pin head (circle)
+        '<circle cx="12.5" cy="12.5" r="10" fill="' + hexColor + '" stroke="white" stroke-width="2"/>' +
+        // Pin point (triangle)
+        '<path d="M 12.5 22.5 L 3 35 L 22 35 Z" fill="' + hexColor + '" stroke="white" stroke-width="1"/>' +
+        '</svg>';
+    
+    return L.divIcon({
+        html: svgIcon,
+        className: 'custom-colored-marker', // Custom class for styling if needed (no default Leaflet styles)
+        iconSize: [25, 35],
+        iconAnchor: [12.5, 35], // Anchor point at the bottom center of the pin
+        popupAnchor: [0, -35] // Position popup above the marker
+    });
+}
+
+// Function to add a marker to the map with a custom color
 // Returns the marker so it can be stored and deleted later
-export function addMarker(map, lat, lng, popupText, entityId, dotNetReference) {
-    var marker = L.marker([lat, lng]).addTo(map);
+export function addMarker(map, lat, lng, popupText, entityId, dotNetReference, color) {
+    // Create a custom colored icon if color is provided, otherwise use default blue
+    var icon = color ? createColoredIcon(color) : undefined;
+    
+    var marker = L.marker([lat, lng], { icon: icon }).addTo(map);
     marker.bindPopup(popupText); // Add a popup to the marker
     
     // If entityId and dotNetReference are provided, add click handler for deletion

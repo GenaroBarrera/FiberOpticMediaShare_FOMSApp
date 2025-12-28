@@ -31,7 +31,7 @@ else
                 <div class="mb-3">
                     <label class="form-label"><strong>Status:</strong></label>
                     <p class="mb-0">
-                        <span class="badge bg-@GetStatusBadgeColor(vault?.Status ?? VaultStatus.Pending)">@vault?.Status</span>
+                        <span class="badge bg-@GetStatusBadgeColor(vault?.Status ?? VaultStatus.New)">@vault?.Status</span>
                     </p>
                 </div>
                 <div class="mb-3">
@@ -57,10 +57,11 @@ else
                     <div class="mb-3">
                         <label for="vaultStatus" class="form-label"><strong>Status:</strong></label>
                         <InputSelect id="vaultStatus" class="form-select" @bind-Value="editModel.Status">
+                            <option value="@VaultStatus.New">New</option>
                             <option value="@VaultStatus.Pending">Pending</option>
                             <option value="@VaultStatus.Review">Review</option>
                             <option value="@VaultStatus.Complete">Complete</option>
-                            <option value="@VaultStatus.Rejected">Rejected</option>
+                            <option value="@VaultStatus.Issue">Issue</option>
                         </InputSelect>
                         <ValidationMessage For="@(() => editModel.Status)" />
                     </div>
@@ -234,18 +235,20 @@ else
     /// <summary>
     /// Gets the Bootstrap badge color class based on the vault status.
     /// Used to visually distinguish different statuses in the UI.
+    /// Maps status colors: New (blue), Pending (brown), Review (gray), Complete (green), Issue (red).
     /// </summary>
     /// <param name="status">The vault status to get the color for</param>
-    /// <returns>A Bootstrap color class name (e.g., "secondary", "warning", "success", "danger")</returns>
+    /// <returns>A Bootstrap color class name or custom CSS class for colors not in Bootstrap</returns>
     private string GetStatusBadgeColor(VaultStatus status)
     {
         return status switch
         {
-            VaultStatus.Pending => "secondary",    // Gray
-            VaultStatus.Review => "warning",         // Yellow
-            VaultStatus.Complete => "success",       // Green
-            VaultStatus.Rejected => "danger",        // Red
-            _ => "secondary"
+            VaultStatus.New => "primary",           // Blue
+            VaultStatus.Pending => "badge-brown",   // Brown (custom CSS class)
+            VaultStatus.Review => "secondary",      // Gray
+            VaultStatus.Complete => "success",      // Green
+            VaultStatus.Issue => "danger",          // Red
+            _ => "secondary"                        // Default to gray
         };
     }
 
@@ -311,8 +314,8 @@ else
                 Name = editModel.Name,
                 Status = editModel.Status,
                 Description = string.IsNullOrWhiteSpace(editModel.Description) ? null : editModel.Description,
-                Location = vault.Location, // Preserve the original location
-                Color = vault.Color // Preserve the original color
+                Location = vault.Location // Preserve the original location
+                // Note: Color will be automatically set by the API based on Status
             };
 
             // Serialize with GeoJSON support for the Location property

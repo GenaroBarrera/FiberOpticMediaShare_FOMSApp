@@ -10,39 +10,46 @@ namespace FOMSApp.Shared.Models
     /// - Database stores as integer (smaller, faster than strings)
     /// 
     /// This enum doesn't create a database table - Entity Framework stores it as an integer column.
-    /// The numeric values (0, 1, 2, 3) are stored in the database, but you work with the names in code.
+    /// The numeric values (0, 1, 2, 3, 4) are stored in the database, but you work with the names in code.
     /// </summary>
     /// <remarks>
-    /// The workflow progression is typically:
-    /// Pending → Review → Complete (approved) OR Rejected (needs rework)
-    /// 
     /// Each status drives visual indicators on the map (pin colors) and determines
     /// business logic (e.g., only Complete vaults sync to Google Drive).
+    /// 
+    /// Status workflow progression:
+    /// New (Blue) → Pending (Brown) → Review (Gray) → Complete (Green)
+    /// Or: New → Issue (Red) if problems are found
     /// </remarks>
     public enum VaultStatus
     {
         /// <summary>
-        /// Initial state when a vault is created. No work has been done yet.
+        /// Initial state when a new vault pin marker is placed on the map.
+        /// Map display: Blue pin
+        /// </summary>
+        New = 0,
+
+        /// <summary>
+        /// Photos are pending for this vault. Waiting for field crew to upload photos.
+        /// Map display: Brown pin
+        /// </summary>
+        Pending = 1,
+
+        /// <summary>
+        /// New photos have been uploaded and are waiting for coordinator review.
         /// Map display: Gray pin
         /// </summary>
-        Pending = 0,
+        Review = 2,
 
         /// <summary>
-        /// Field crew has uploaded photos for this vault. Waiting for coordinator review.
-        /// Map display: Yellow pin
-        /// </summary>
-        Review = 1,
-
-        /// <summary>
-        /// Coordinator approved the work. Photos are ready to be synced to Google Drive.
+        /// Photos are complete and approved. Ready for final processing or sync to Google Drive.
         /// Map display: Green pin
         /// </summary>
-        Complete = 2,
+        Complete = 3,
 
         /// <summary>
-        /// Photos were rejected. Field crew needs to fix issues and re-upload.
+        /// Issue present: missing photos or other problems that need to be addressed.
         /// Map display: Red pin
         /// </summary>
-        Rejected = 3
+        Issue = 4
     }
 }
