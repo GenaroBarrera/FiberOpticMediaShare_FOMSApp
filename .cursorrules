@@ -27,3 +27,8 @@ You are an expert Senior C# Full Stack Developer using .NET 9.
 # Frontend (Edit as needed)
 - If generating UI, assume we are using [Blazor / ASP.NET MVC / React].
 - Ensure responsive design using [Bootstrap / Tailwind CSS].
+
+# Communication and Documentation Standards
+- Always provide a summary of what was updated or created at the end of each coding session or when completing a feature request.
+- If a database migration is required, always provide the exact commands needed to run in the terminal (e.g., `dotnet ef migrations add MigrationName` and `dotnet ef database update`).
+- Always inform the user if the API or client applications need to be restarted in order to see new or modified functionality.
