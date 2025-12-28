@@ -213,8 +213,21 @@ else
                             latLngs.Add(new { lat = coord.Y, lng = coord.X });
                         }
 
+                        // Build popup content with labeled fields: Name, Description, Color, Length, and link to details
+                        string descriptionText = string.IsNullOrWhiteSpace(cable.Description) 
+                            ? "No description provided." 
+                            : System.Net.WebUtility.HtmlEncode(cable.Description);
+                        string lengthText = GetCableLengthForPopup(cable);
+                        string popup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
+                            $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(cable.Name)}<br>" +
+                            $"<strong>Description:</strong> {descriptionText}<br>" +
+                            $"<strong>Color:</strong> {cable.Color}<br>" +
+                            $"<strong>Length:</strong> {lengthText}<br>" +
+                            $"<a href='cable/{cable.Id}' style='margin-top: 8px; display: inline-block;'>View Details</a>" +
+                            $"</div>";
+
                         // Call the JS function and store the reference
-                        var polylineRef = await module.InvokeAsync<IJSObjectReference>("addPolyline", mapInstance, latLngs, cable.Color, $"<b>{cable.Name}</b>", cable.Id, dotNetReference);
+                        var polylineRef = await module.InvokeAsync<IJSObjectReference>("addPolyline", mapInstance, latLngs, cable.Color, popup, cable.Id, dotNetReference);
                         mapLayers[$"cable_{cable.Id}"] = polylineRef;
                     }
                 }
@@ -554,12 +567,12 @@ else
         var coordinates = cablePoints.Select(p => new Coordinate(p.Lng, p.Lat)).ToArray();
         var lineString = factory.CreateLineString(coordinates);
 
-        // Create the cable object
+        // Create the cable object with default black color
         var newCable = new Cable
         {
             Name = cableName,
             Path = lineString,
-            Color = "Orange"
+            Color = "Black" // Default color for newly drawn cables
         };
 
         // Serialize with GeoJSON support
@@ -590,7 +603,19 @@ else
                 }
                 if (dotNetReference != null)
                 {
-                    var polylineRef = await module.InvokeAsync<IJSObjectReference>("addPolyline", mapInstance, latLngs, createdCable.Color, $"<b>{createdCable.Name}</b>", createdCable.Id, dotNetReference);
+                    // Build popup content with labeled fields: Name, Description, Color, Length, and link to details
+                    string descriptionText = string.IsNullOrWhiteSpace(createdCable.Description) 
+                        ? "No description provided." 
+                        : System.Net.WebUtility.HtmlEncode(createdCable.Description);
+                    string lengthText = GetCableLengthForPopup(createdCable);
+                    string popup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
+                        $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(createdCable.Name)}<br>" +
+                        $"<strong>Description:</strong> {descriptionText}<br>" +
+                        $"<strong>Color:</strong> {createdCable.Color}<br>" +
+                        $"<strong>Length:</strong> {lengthText}<br>" +
+                        $"<a href='cable/{createdCable.Id}' style='margin-top: 8px; display: inline-block;'>View Details</a>" +
+                        $"</div>";
+                    var polylineRef = await module.InvokeAsync<IJSObjectReference>("addPolyline", mapInstance, latLngs, createdCable.Color, popup, createdCable.Id, dotNetReference);
                     mapLayers[$"cable_{createdCable.Id}"] = polylineRef;
                 }
 
@@ -784,6 +809,58 @@ else
             MidpointStatus.Issue => "LightCoral",
             _ => "Black" // Default to black
         };
+    }
+
+    /// <summary>
+    /// Calculates and formats the cable length for display in popups.
+    /// Uses the Haversine formula to calculate the great-circle distance between consecutive points.
+    /// </summary>
+    /// <param name="cable">The cable object containing the Path LineString</param>
+    /// <returns>A formatted string showing the length in meters and/or kilometers</returns>
+    private string GetCableLengthForPopup(Cable? cable)
+    {
+        if (cable?.Path == null || cable.Path.NumPoints < 2)
+        {
+            return "N/A";
+        }
+
+        double totalLengthMeters = 0.0;
+        var coordinates = cable.Path.Coordinates;
+
+        // Calculate distance between consecutive points using Haversine formula
+        for (int i = 0; i < coordinates.Length - 1; i++)
+        {
+            var point1 = coordinates[i];
+            var point2 = coordinates[i + 1];
+            
+            // Haversine formula to calculate distance between two lat/lng points
+            double lat1 = point1.Y * Math.PI / 180.0; // Convert to radians
+            double lat2 = point2.Y * Math.PI / 180.0;
+            double deltaLat = (point2.Y - point1.Y) * Math.PI / 180.0;
+            double deltaLng = (point2.X - point1.X) * Math.PI / 180.0;
+
+            double a = Math.Sin(deltaLat / 2) * Math.Sin(deltaLat / 2) +
+                       Math.Cos(lat1) * Math.Cos(lat2) *
+                       Math.Sin(deltaLng / 2) * Math.Sin(deltaLng / 2);
+            double c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+            
+            // Earth's radius in meters (WGS84)
+            const double earthRadiusMeters = 6371000.0;
+            double distanceMeters = earthRadiusMeters * c;
+            
+            totalLengthMeters += distanceMeters;
+        }
+
+        // Format the result for popup (shorter format)
+        if (totalLengthMeters < 1000)
+        {
+            return $"{totalLengthMeters:F1} m";
+        }
+        else
+        {
+            double kilometers = totalLengthMeters / 1000.0;
+            return $"{kilometers:F2} km";
+        }
     }
 
     /// <summary>

@@ -26,12 +26,19 @@ namespace FOMSApp.Shared.Models
 
         /// <summary>
         /// Color used to render the cable polyline on the map.
-        /// Can be a CSS color name (e.g., "Orange", "Blue", "Red") or hex code (e.g., "#FF5733").
+        /// Can be a CSS color name (e.g., "Black", "Blue", "Orange", "Green", "Brown", "Pink", "Teal") or hex code (e.g., "#000000").
         /// 
-        /// Default is "Orange" - a common color for fiber optic cables in engineering diagrams.
+        /// Default is "Black" - the standard default color for newly drawn cables.
         /// Different colors can represent different cable types, capacities, or installation phases.
         /// </summary>
-        public string Color { get; set; } = "Orange";
+        public string Color { get; set; } = "Black";
+
+        /// <summary>
+        /// Optional description or notes about the cable route.
+        /// Used to store additional context, installation details, or observations about the cable.
+        /// Can be edited by users on the cable details page.
+        /// </summary>
+        public string? Description { get; set; }
 
         /// <summary>
         /// The geographic path of the cable as a series of connected points.

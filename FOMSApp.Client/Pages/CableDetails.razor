@@ -1,0 +1,339 @@
+@page "/cable/{Id:int}"
+@using FOMSApp.Shared.Models
+@using System.Text.Json
+@using NetTopologySuite.IO.Converters
+@using NetTopologySuite.Geometries
+@using Microsoft.JSInterop
+@inject HttpClient Http
+@inject IJSRuntime JS
+
+<PageTitle>Cable Details</PageTitle>
+
+@if (cable == null)
+{
+    <p><em>Loading details...</em></p>
+}
+else
+{
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h2 class="mb-0">Cable Details</h2>
+            <a href="/" class="btn btn-light btn-sm">Back to Map</a>
+        </div>
+        <div class="card-body">
+            @if (!isEditing)
+            {
+                <!-- View Mode -->
+                <div class="mb-3">
+                    <label class="form-label"><strong>Name:</strong></label>
+                    <p class="mb-0">@(cable?.Name ?? "Unknown")</p>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label"><strong>Description:</strong></label>
+                    <p class="mb-0">@(cable?.Description ?? "No description provided.")</p>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label"><strong>Color:</strong></label>
+                    <p class="mb-0">
+                        <span class="badge" style="background-color: @GetColorHex(cable?.Color ?? "Black"); color: white; padding: 0.35em 0.65em;">
+                            @(cable?.Color ?? "Black")
+                        </span>
+                    </p>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label"><strong>Length:</strong></label>
+                    <p class="mb-0">@GetCableLength(cable)</p>
+                </div>
+                <button type="button" class="btn btn-primary" @onclick="StartEditing">Edit Cable</button>
+            }
+            else if (editModel != null)
+            {
+                <!-- Edit Mode -->
+                <EditForm Model="@editModel" OnValidSubmit="@SaveCable">
+                    <DataAnnotationsValidator />
+                    <div class="mb-3">
+                        <label for="cableName" class="form-label"><strong>Name:</strong></label>
+                        <InputText id="cableName" class="form-control" @bind-Value="editModel.Name" />
+                        <ValidationMessage For="@(() => editModel.Name)" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="cableDescription" class="form-label"><strong>Description:</strong></label>
+                        <InputTextArea id="cableDescription" class="form-control" rows="4" @bind-Value="editModel.Description" placeholder="Enter a brief description or notes about this cable..." />
+                        <ValidationMessage For="@(() => editModel.Description)" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="cableColor" class="form-label"><strong>Color:</strong></label>
+                        <InputSelect id="cableColor" class="form-select" @bind-Value="editModel.Color">
+                            <option value="Black">Black</option>
+                            <option value="Blue">Blue</option>
+                            <option value="Orange">Orange</option>
+                            <option value="Green">Green</option>
+                            <option value="Brown">Brown</option>
+                            <option value="Pink">Pink</option>
+                            <option value="Teal">Teal</option>
+                        </InputSelect>
+                        <ValidationMessage For="@(() => editModel.Color)" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label"><strong>Length:</strong></label>
+                        <p class="mb-0 text-muted">@GetCableLength(cable) (calculated, cannot be changed)</p>
+                    </div>
+                    <div class="btn-group">
+                        <button type="submit" class="btn btn-primary" disabled="@isSaving">
+                            @if (isSaving)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                <text>Saving...</text>
+                            }
+                            else
+                            {
+                                <text>Save Changes</text>
+                            }
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" @onclick="CancelEditing" disabled="@isSaving">Cancel</button>
+                    </div>
+                </EditForm>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private Cable? cable;
+    
+    /// <summary>
+    /// Indicates whether the cable details are currently being edited.
+    /// When true, the UI switches from view mode to edit mode (form fields).
+    /// </summary>
+    private bool isEditing = false;
+
+    /// <summary>
+    /// Indicates whether a cable update is currently in progress.
+    /// Used to disable the save button and show a loading spinner during save.
+    /// </summary>
+    private bool isSaving = false;
+
+    /// <summary>
+    /// Temporary model used for editing cable properties.
+    /// This allows users to make changes without modifying the original cable object
+    /// until they click "Save Changes". If they cancel, the original values are preserved.
+    /// </summary>
+    private CableEditModel? editModel;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCable();
+    }
+
+    /// <summary>
+    /// Loads the cable details from the API.
+    /// </summary>
+    private async Task LoadCable()
+    {
+        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        options.Converters.Add(new GeoJsonConverterFactory());
+        cable = await Http.GetFromJsonAsync<Cable>($"api/cables/{Id}", options);
+    }
+
+    /// <summary>
+    /// Calculates and formats the cable length in meters and kilometers.
+    /// Uses the Haversine formula to calculate the great-circle distance between consecutive points.
+    /// </summary>
+    /// <param name="cable">The cable object containing the Path LineString</param>
+    /// <returns>A formatted string showing the length in meters and kilometers</returns>
+    private string GetCableLength(Cable? cable)
+    {
+        if (cable?.Path == null || cable.Path.NumPoints < 2)
+        {
+            return "N/A (insufficient points)";
+        }
+
+        double totalLengthMeters = 0.0;
+        var coordinates = cable.Path.Coordinates;
+
+        // Calculate distance between consecutive points using Haversine formula
+        for (int i = 0; i < coordinates.Length - 1; i++)
+        {
+            var point1 = coordinates[i];
+            var point2 = coordinates[i + 1];
+            
+            // Haversine formula to calculate distance between two lat/lng points
+            double lat1 = point1.Y * Math.PI / 180.0; // Convert to radians
+            double lat2 = point2.Y * Math.PI / 180.0;
+            double deltaLat = (point2.Y - point1.Y) * Math.PI / 180.0;
+            double deltaLng = (point2.X - point1.X) * Math.PI / 180.0;
+
+            double a = Math.Sin(deltaLat / 2) * Math.Sin(deltaLat / 2) +
+                       Math.Cos(lat1) * Math.Cos(lat2) *
+                       Math.Sin(deltaLng / 2) * Math.Sin(deltaLng / 2);
+            double c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+            
+            // Earth's radius in meters (WGS84)
+            const double earthRadiusMeters = 6371000.0;
+            double distanceMeters = earthRadiusMeters * c;
+            
+            totalLengthMeters += distanceMeters;
+        }
+
+        // Format the result
+        if (totalLengthMeters < 1000)
+        {
+            return $"{totalLengthMeters:F2} meters";
+        }
+        else
+        {
+            double kilometers = totalLengthMeters / 1000.0;
+            return $"{kilometers:F3} km ({totalLengthMeters:F2} meters)";
+        }
+    }
+
+    /// <summary>
+    /// Gets the hex color code for a given color name.
+    /// Used to display the color badge with the correct background color.
+    /// </summary>
+    /// <param name="colorName">The color name (e.g., "Blue", "Orange", "Black")</param>
+    /// <returns>A hex color code string</returns>
+    private string GetColorHex(string colorName)
+    {
+        return colorName?.ToLower() switch
+        {
+            "black" => "#000000",
+            "blue" => "#007bff",
+            "orange" => "#ff8c00",
+            "green" => "#28a745",
+            "brown" => "#8b4513",
+            "pink" => "#ff69b4",
+            "teal" => "#20c997",
+            _ => "#000000" // Default to black
+        };
+    }
+
+    /// <summary>
+    /// Switches the UI from view mode to edit mode.
+    /// Creates a copy of the current cable data for editing, allowing users to modify
+    /// properties without affecting the original until they save.
+    /// </summary>
+    private void StartEditing()
+    {
+        if (cable == null) return;
+
+        // Create a copy of the cable data for editing
+        editModel = new CableEditModel
+        {
+            Id = cable.Id,
+            Name = cable.Name ?? string.Empty,
+            Description = cable.Description ?? string.Empty,
+            Color = cable.Color ?? "Black"
+        };
+
+        isEditing = true;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Cancels editing and returns to view mode without saving changes.
+    /// Discards any modifications made to the editModel.
+    /// </summary>
+    private void CancelEditing()
+    {
+        isEditing = false;
+        editModel = null;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Saves the edited cable properties to the server.
+    /// Called when the user submits the edit form (clicks "Save Changes").
+    /// </summary>
+    private async Task SaveCable()
+    {
+        if (editModel == null || cable == null)
+        {
+            return;
+        }
+
+        isSaving = true;
+        StateHasChanged();
+
+        try
+        {
+            // Create a Cable object with the updated properties
+            // Note: We preserve the Path property from the original cable (it cannot be changed)
+            var updatedCable = new Cable
+            {
+                Id = editModel.Id,
+                Name = editModel.Name,
+                Description = string.IsNullOrWhiteSpace(editModel.Description) ? null : editModel.Description,
+                Color = editModel.Color,
+                Path = cable.Path // Preserve the original path - it cannot be changed after creation
+            };
+
+            // Serialize with GeoJSON support for the Path property
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            options.Converters.Add(new GeoJsonConverterFactory());
+
+            // Send PUT request to update the cable
+            var response = await Http.PutAsJsonAsync($"api/cables/{editModel.Id}", updatedCable, options);
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Reload the cable from the server to get the latest data
+                await LoadCable();
+                
+                // Exit edit mode
+                isEditing = false;
+                editModel = null;
+                
+                // Force UI update to reflect the changes
+                StateHasChanged();
+            }
+            else
+            {
+                var errorMessage = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Update failed: {errorMessage}");
+                await JS.InvokeVoidAsync("alert", $"Failed to update cable: {errorMessage}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating cable: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Error updating cable: {ex.Message}");
+        }
+        finally
+        {
+            isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Data model used for editing cable properties in the form.
+    /// This is separate from the Cable model to allow validation and prevent
+    /// accidentally modifying properties that shouldn't be edited (like Path).
+    /// </summary>
+    private class CableEditModel
+    {
+        /// <summary>
+        /// The unique identifier of the cable being edited.
+        /// </summary>
+        public int Id { get; set; }
+
+        /// <summary>
+        /// The cable name. Required field for identification.
+        /// </summary>
+        public string Name { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Optional description or notes about the cable.
+        /// Can be null or empty if no description is provided.
+        /// </summary>
+        public string? Description { get; set; }
+
+        /// <summary>
+        /// The color used to render the cable on the map.
+        /// Must be one of: Black, Blue, Orange, Green, Brown, Pink, Teal.
+        /// </summary>
+        public string Color { get; set; } = "Black";
+    }
+}
