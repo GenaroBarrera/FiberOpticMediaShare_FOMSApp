@@ -135,7 +135,7 @@ code {
 }
 
 /* Custom badge color for "Pending" status (brown) */
-.badge-brown {
+.badge.badge-brown {
     background-color: #8B4513; /* SaddleBrown color */
     color: white;
 }

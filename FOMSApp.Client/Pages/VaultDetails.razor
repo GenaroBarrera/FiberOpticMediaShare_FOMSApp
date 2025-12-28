@@ -31,7 +31,12 @@ else
                 <div class="mb-3">
                     <label class="form-label"><strong>Status:</strong></label>
                     <p class="mb-0">
-                        <span class="badge bg-@GetStatusBadgeColor(vault?.Status ?? VaultStatus.New)">@vault?.Status</span>
+                        @{
+                            var statusColor = GetStatusBadgeColor(vault?.Status ?? VaultStatus.New);
+                            // For custom badge-brown class, use it directly; for Bootstrap classes, use bg- prefix
+                            var badgeClass = statusColor == "badge-brown" ? "badge badge-brown" : $"badge bg-{statusColor}";
+                        }
+                        <span class="@badgeClass">@vault?.Status</span>
                     </p>
                 </div>
                 <div class="mb-3">
@@ -333,6 +338,9 @@ else
                 // Exit edit mode
                 isEditing = false;
                 editModel = null;
+                
+                // Force UI update to reflect the changes
+                StateHasChanged();
             }
             else
             {
