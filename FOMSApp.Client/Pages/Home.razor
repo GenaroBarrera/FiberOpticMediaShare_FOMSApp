@@ -160,11 +160,18 @@ else
                 {
                     if (vault.Location != null)
                     {
-                        // Build popup content with name, status, description (if available), and link to details
+                        // Build popup content with labeled fields: Name, Status, Description, Coordinates, and link to details
                         string descriptionText = string.IsNullOrWhiteSpace(vault.Description) 
-                            ? string.Empty 
-                            : $"<br><i>{System.Net.WebUtility.HtmlEncode(vault.Description)}</i>";
-                        string popup = $"<b>{System.Net.WebUtility.HtmlEncode(vault.Name)}</b><br>{vault.Status}{descriptionText}<br><a href='vault/{vault.Id}'>View Details</a>";
+                            ? "No description provided." 
+                            : System.Net.WebUtility.HtmlEncode(vault.Description);
+                        string coordinates = $"{vault.Location.Y:F6}, {vault.Location.X:F6}";
+                        string popup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
+                            $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(vault.Name)}<br>" +
+                            $"<strong>Status:</strong> {vault.Status}<br>" +
+                            $"<strong>Description:</strong> {descriptionText}<br>" +
+                            $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
+                            $"<a href='vault/{vault.Id}' style='margin-top: 8px; display: inline-block;'>View Details</a>" +
+                            $"</div>";
                         // Pass the vault's Color property to display the marker in the correct status color
                         var markerRef = await module.InvokeAsync<IJSObjectReference>("addMarker", mapInstance, vault.Location.Y, vault.Location.X, popup, vault.Id, dotNetReference, vault.Color);
                         mapLayers[$"vault_{vault.Id}"] = markerRef;
@@ -176,11 +183,18 @@ else
                 {
                     if (mp.Location != null)
                     {
-                        // Build popup content with name, status, description (if available), and link to details
+                        // Build popup content with labeled fields: Name, Status, Description, Coordinates, and link to details
                         string descriptionText = string.IsNullOrWhiteSpace(mp.Description) 
-                            ? string.Empty 
-                            : $"<br><i>{System.Net.WebUtility.HtmlEncode(mp.Description)}</i>";
-                        string popup = $"<b>{System.Net.WebUtility.HtmlEncode(mp.Name)}</b><br>{mp.Status}{descriptionText}<br><a href='midpoint/{mp.Id}'>View Details</a>";
+                            ? "No description provided." 
+                            : System.Net.WebUtility.HtmlEncode(mp.Description);
+                        string coordinates = $"{mp.Location.Y:F6}, {mp.Location.X:F6}";
+                        string popup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
+                            $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(mp.Name)}<br>" +
+                            $"<strong>Status:</strong> {mp.Status}<br>" +
+                            $"<strong>Description:</strong> {descriptionText}<br>" +
+                            $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
+                            $"<a href='midpoint/{mp.Id}' style='margin-top: 8px; display: inline-block;'>View Details</a>" +
+                            $"</div>";
                         // Pass the midpoint's Color property to display the marker in the correct status color
                         var circleRef = await module.InvokeAsync<IJSObjectReference>("addCircle", mapInstance, mp.Location.Y, mp.Location.X, mp.Color, popup, mp.Id, dotNetReference);
                         mapLayers[$"midpoint_{mp.Id}"] = circleRef;
@@ -394,11 +408,18 @@ else
             if (createdVault != null && createdVault.Location != null && dotNetReference != null)
             {
                 // Add marker to map immediately and store reference for deletion
-                // Build popup content with name, status, description (if available), and link to details
+                // Build popup content with labeled fields: Name, Status, Description, Coordinates, and link to details
                 string descriptionText = string.IsNullOrWhiteSpace(createdVault.Description) 
-                    ? string.Empty 
-                    : $"<br><i>{System.Net.WebUtility.HtmlEncode(createdVault.Description)}</i>";
-                string popup = $"<b>{System.Net.WebUtility.HtmlEncode(createdVault.Name)}</b><br>{createdVault.Status}{descriptionText}<br><a href='vault/{createdVault.Id}'>View Details</a>";
+                    ? "No description provided." 
+                    : System.Net.WebUtility.HtmlEncode(createdVault.Description);
+                string coordinates = $"{createdVault.Location.Y:F6}, {createdVault.Location.X:F6}";
+                string popup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
+                    $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(createdVault.Name)}<br>" +
+                    $"<strong>Status:</strong> {createdVault.Status}<br>" +
+                    $"<strong>Description:</strong> {descriptionText}<br>" +
+                    $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
+                    $"<a href='vault/{createdVault.Id}' style='margin-top: 8px; display: inline-block;'>View Details</a>" +
+                    $"</div>";
                 // Pass the vault's Color property to display the marker in the correct status color
                 var markerRef = await module.InvokeAsync<IJSObjectReference>("addMarker", mapInstance, createdVault.Location.Y, createdVault.Location.X, popup, createdVault.Id, dotNetReference, createdVault.Color);
                 mapLayers[$"vault_{createdVault.Id}"] = markerRef;
@@ -453,11 +474,18 @@ else
             if (createdMidpoint != null && createdMidpoint.Location != null && dotNetReference != null)
             {
                 // Add circle to map immediately and store reference for deletion
-                // Build popup content with name, status, description (if available), and link to details
+                // Build popup content with labeled fields: Name, Status, Description, Coordinates, and link to details
                 string descriptionText = string.IsNullOrWhiteSpace(createdMidpoint.Description) 
-                    ? string.Empty 
-                    : $"<br><i>{System.Net.WebUtility.HtmlEncode(createdMidpoint.Description)}</i>";
-                string popup = $"<b>{System.Net.WebUtility.HtmlEncode(createdMidpoint.Name)}</b><br>{createdMidpoint.Status}{descriptionText}<br><a href='midpoint/{createdMidpoint.Id}'>View Details</a>";
+                    ? "No description provided." 
+                    : System.Net.WebUtility.HtmlEncode(createdMidpoint.Description);
+                string coordinates = $"{createdMidpoint.Location.Y:F6}, {createdMidpoint.Location.X:F6}";
+                string popup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
+                    $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(createdMidpoint.Name)}<br>" +
+                    $"<strong>Status:</strong> {createdMidpoint.Status}<br>" +
+                    $"<strong>Description:</strong> {descriptionText}<br>" +
+                    $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
+                    $"<a href='midpoint/{createdMidpoint.Id}' style='margin-top: 8px; display: inline-block;'>View Details</a>" +
+                    $"</div>";
                 // Pass the midpoint's Color property to display the marker in the correct status color
                 var circleRef = await module.InvokeAsync<IJSObjectReference>("addCircle", mapInstance, createdMidpoint.Location.Y, createdMidpoint.Location.X, createdMidpoint.Color, popup, createdMidpoint.Id, dotNetReference);
                 mapLayers[$"midpoint_{createdMidpoint.Id}"] = circleRef;
