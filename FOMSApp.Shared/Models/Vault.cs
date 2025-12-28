@@ -38,6 +38,13 @@ namespace FOMSApp.Shared.Models
         public VaultStatus Status { get; set; } = VaultStatus.Pending;
 
         /// <summary>
+        /// Optional description or comments about the vault.
+        /// Used to store notes, observations, or additional context about the vault's condition or location.
+        /// Can be edited by users on the vault details page.
+        /// </summary>
+        public string? Description { get; set; }
+
+        /// <summary>
         /// Geographic coordinates (latitude/longitude) of the vault's physical location.
         /// Uses NetTopologySuite's Point type which stores coordinates as (X=Longitude, Y=Latitude).
         /// 

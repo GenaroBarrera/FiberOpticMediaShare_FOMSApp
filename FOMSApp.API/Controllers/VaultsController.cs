@@ -135,6 +135,74 @@ namespace FOMSApp.API.Controllers
         }
 
         /// <summary>
+        /// Updates an existing vault's properties (name, status, description).
+        /// Does not update the Location property - vaults cannot be moved after creation.
+        /// </summary>
+        /// <param name="id">The unique ID of the vault to update (from the URL route)</param>
+        /// <param name="vault">
+        /// The updated vault data. Only Name, Status, and Description properties are updated.
+        /// The Location property is ignored to prevent accidental movement of vaults.
+        /// </param>
+        /// <returns>
+        /// HTTP 204 No Content if successfully updated, HTTP 400 Bad Request if the ID doesn't match,
+        /// or HTTP 404 Not Found if the vault doesn't exist.
+        /// </returns>
+        /// <remarks>
+        /// RESTful Best Practice: PUT operations typically return 204 No Content (success with no body)
+        /// when the update is successful, as the client already knows what was sent.
+        /// 
+        /// This method uses a partial update pattern - only the provided properties are updated.
+        /// The Location property is explicitly preserved to prevent vaults from being moved.
+        /// 
+        /// Entity Framework's Update() method marks all properties as modified, so we manually
+        /// set only the properties we want to allow editing.
+        /// </remarks>
+        // PUT: api/vaults/5
+        [HttpPut("{id}")]
+        public async Task<IActionResult> PutVault(int id, Vault vault)
+        {
+            // Ensure the ID in the URL matches the ID in the request body
+            if (id != vault.Id)
+            {
+                return BadRequest("The ID in the URL does not match the ID in the request body.");
+            }
+
+            // Find the existing vault in the database
+            var existingVault = await _context.Vaults.FindAsync(id);
+            if (existingVault == null)
+            {
+                return NotFound();
+            }
+
+            // Update only the editable properties (preserve Location and other system properties)
+            existingVault.Name = vault.Name;
+            existingVault.Status = vault.Status;
+            existingVault.Description = vault.Description;
+            // Note: Location is NOT updated - vaults cannot be moved after creation
+
+            // Mark the entity as modified so Entity Framework knows to update it
+            _context.Entry(existingVault).State = EntityState.Modified;
+
+            try
+            {
+                // Execute the SQL UPDATE statement
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                // Handle concurrency conflicts (if another user modified the vault simultaneously)
+                if (!await _context.Vaults.AnyAsync(e => e.Id == id))
+                {
+                    return NotFound();
+                }
+                throw; // Re-throw if it's a different concurrency issue
+            }
+
+            // Return 204 No Content (successful update with no response body)
+            return NoContent();
+        }
+
+        /// <summary>
         /// Deletes a vault from the database by its unique identifier.
         /// Also deletes all associated photos (cascade delete handled by database or explicit deletion).
         /// </summary>

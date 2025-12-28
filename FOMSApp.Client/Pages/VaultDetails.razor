@@ -16,13 +16,79 @@
 else
 {
     <div class="card mb-4">
-        <div class="card-header bg-primary text-white">
-            <h2>@vault.Name</h2>
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h2 class="mb-0">Vault Details</h2>
+            <a href="/" class="btn btn-light btn-sm">Back to Map</a>
         </div>
         <div class="card-body">
-            <p><strong>Status:</strong> @vault.Status</p>
-            <p><strong>Location ID:</strong> @vault.Id</p>
-            <a href="/" class="btn btn-outline-secondary">Back to Map</a>
+            @if (!isEditing)
+            {
+                <!-- View Mode -->
+                <div class="mb-3">
+                    <label class="form-label"><strong>Name:</strong></label>
+                    <p class="mb-0">@(vault?.Name ?? "Unknown")</p>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label"><strong>Status:</strong></label>
+                    <p class="mb-0">
+                        <span class="badge bg-@GetStatusBadgeColor(vault?.Status ?? VaultStatus.Pending)">@vault?.Status</span>
+                    </p>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label"><strong>Description:</strong></label>
+                    <p class="mb-0">@(vault?.Description ?? "No description provided.")</p>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label"><strong>Location ID:</strong></label>
+                    <p class="mb-0">@(vault?.Id ?? 0)</p>
+                </div>
+                <button type="button" class="btn btn-primary" @onclick="StartEditing">Edit Vault</button>
+            }
+            else if (editModel != null)
+            {
+                <!-- Edit Mode -->
+                <EditForm Model="@editModel" OnValidSubmit="@SaveVault">
+                    <DataAnnotationsValidator />
+                    <div class="mb-3">
+                        <label for="vaultName" class="form-label"><strong>Name:</strong></label>
+                        <InputText id="vaultName" class="form-control" @bind-Value="editModel.Name" />
+                        <ValidationMessage For="@(() => editModel.Name)" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="vaultStatus" class="form-label"><strong>Status:</strong></label>
+                        <InputSelect id="vaultStatus" class="form-select" @bind-Value="editModel.Status">
+                            <option value="@VaultStatus.Pending">Pending</option>
+                            <option value="@VaultStatus.Review">Review</option>
+                            <option value="@VaultStatus.Complete">Complete</option>
+                            <option value="@VaultStatus.Rejected">Rejected</option>
+                        </InputSelect>
+                        <ValidationMessage For="@(() => editModel.Status)" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="vaultDescription" class="form-label"><strong>Description:</strong></label>
+                        <InputTextArea id="vaultDescription" class="form-control" rows="4" @bind-Value="editModel.Description" placeholder="Enter a brief description or notes about this vault..." />
+                        <ValidationMessage For="@(() => editModel.Description)" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label"><strong>Location ID:</strong></label>
+                        <p class="mb-0 text-muted">@(vault?.Id ?? 0) (cannot be changed)</p>
+                    </div>
+                    <div class="btn-group">
+                        <button type="submit" class="btn btn-primary" disabled="@isSaving">
+                            @if (isSaving)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                <text>Saving...</text>
+                            }
+                            else
+                            {
+                                <text>Save Changes</text>
+                            }
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" @onclick="CancelEditing" disabled="@isSaving">Cancel</button>
+                    </div>
+                </EditForm>
+            }
         </div>
     </div>
 
@@ -119,6 +185,25 @@ else
     private string? selectedPhotoUrl; // Holds the URL of the photo we want to zoom in on
     
     /// <summary>
+    /// Indicates whether the vault details are currently being edited.
+    /// When true, the UI switches from view mode to edit mode (form fields).
+    /// </summary>
+    private bool isEditing = false;
+
+    /// <summary>
+    /// Indicates whether a vault update is currently in progress.
+    /// Used to disable the save button and show a loading spinner during save.
+    /// </summary>
+    private bool isSaving = false;
+
+    /// <summary>
+    /// Temporary model used for editing vault properties.
+    /// This allows users to make changes without modifying the original vault object
+    /// until they click "Save Changes". If they cancel, the original values are preserved.
+    /// </summary>
+    private VaultEditModel? editModel;
+
+    /// <summary>
     /// Reference to the file input element. Used to reset it after successful upload
     /// so users can upload multiple photos without page refresh.
     /// </summary>
@@ -144,6 +229,125 @@ else
     private void ClosePhoto() // Closes the larger view
     {
         selectedPhotoUrl = null;
+    }
+
+    /// <summary>
+    /// Gets the Bootstrap badge color class based on the vault status.
+    /// Used to visually distinguish different statuses in the UI.
+    /// </summary>
+    /// <param name="status">The vault status to get the color for</param>
+    /// <returns>A Bootstrap color class name (e.g., "secondary", "warning", "success", "danger")</returns>
+    private string GetStatusBadgeColor(VaultStatus status)
+    {
+        return status switch
+        {
+            VaultStatus.Pending => "secondary",    // Gray
+            VaultStatus.Review => "warning",         // Yellow
+            VaultStatus.Complete => "success",       // Green
+            VaultStatus.Rejected => "danger",        // Red
+            _ => "secondary"
+        };
+    }
+
+    /// <summary>
+    /// Switches the UI from view mode to edit mode.
+    /// Creates a copy of the current vault data for editing, allowing users to modify
+    /// properties without affecting the original until they save.
+    /// </summary>
+    /// <summary>
+    /// Switches the UI from view mode to edit mode.
+    /// Creates a copy of the current vault data for editing, allowing users to modify
+    /// properties without affecting the original until they save.
+    /// </summary>
+    private void StartEditing()
+    {
+        if (vault == null) return;
+
+        // Create a copy of the vault data for editing
+        editModel = new VaultEditModel
+        {
+            Id = vault.Id,
+            Name = vault.Name ?? string.Empty,
+            Status = vault.Status,
+            Description = vault.Description ?? string.Empty
+        };
+
+        isEditing = true;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Cancels editing and returns to view mode without saving changes.
+    /// Discards any modifications made to the editModel.
+    /// </summary>
+    private void CancelEditing()
+    {
+        isEditing = false;
+        editModel = null;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Saves the edited vault properties to the server.
+    /// Called when the user submits the edit form (clicks "Save Changes").
+    /// </summary>
+    private async Task SaveVault()
+    {
+        if (editModel == null || vault == null)
+        {
+            return;
+        }
+
+        isSaving = true;
+        StateHasChanged();
+
+        try
+        {
+            // Create a Vault object with the updated properties
+            // Note: We preserve the Location property from the original vault
+            var updatedVault = new Vault
+            {
+                Id = editModel.Id,
+                Name = editModel.Name,
+                Status = editModel.Status,
+                Description = string.IsNullOrWhiteSpace(editModel.Description) ? null : editModel.Description,
+                Location = vault.Location, // Preserve the original location
+                Color = vault.Color // Preserve the original color
+            };
+
+            // Serialize with GeoJSON support for the Location property
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            options.Converters.Add(new GeoJsonConverterFactory());
+
+            // Send PUT request to update the vault
+            var response = await Http.PutAsJsonAsync($"api/vaults/{editModel.Id}", updatedVault, options);
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Reload the vault from the server to get the latest data
+                await LoadVault();
+                
+                // Exit edit mode
+                isEditing = false;
+                editModel = null;
+            }
+            else
+            {
+                var errorMessage = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Update failed: {errorMessage}");
+                await JS.InvokeVoidAsync("alert", $"Failed to update vault: {errorMessage}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating vault: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Error updating vault: {ex.Message}");
+        }
+        finally
+        {
+            isSaving = false;
+            StateHasChanged();
+        }
     }
 
     protected override async Task OnInitializedAsync()
@@ -280,5 +484,34 @@ else
             Console.WriteLine($"Error deleting photo: {ex.Message}");
             await JS.InvokeAsync<string>("alert", $"Error deleting photo: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Data model used for editing vault properties in the form.
+    /// This is separate from the Vault model to allow validation and prevent
+    /// accidentally modifying properties that shouldn't be edited (like Location).
+    /// </summary>
+    private class VaultEditModel
+    {
+        /// <summary>
+        /// The unique identifier of the vault being edited.
+        /// </summary>
+        public int Id { get; set; }
+
+        /// <summary>
+        /// The vault name. Required field for identification.
+        /// </summary>
+        public string Name { get; set; } = string.Empty;
+
+        /// <summary>
+        /// The current workflow status of the vault.
+        /// </summary>
+        public VaultStatus Status { get; set; }
+
+        /// <summary>
+        /// Optional description or notes about the vault.
+        /// Can be null or empty if no description is provided.
+        /// </summary>
+        public string? Description { get; set; }
     }
 }
