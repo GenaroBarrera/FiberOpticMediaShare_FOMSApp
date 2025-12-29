@@ -53,36 +53,54 @@ else
             </div>
         </div>
 
-        <!-- Search Bar on the right -->
-        <div class="search-bar-container">
-            <div class="input-group" style="width: 400px;">
-                <input type="text" 
-                       class="form-control" 
-                       placeholder="Search address or coordinates..." 
-                       @bind="searchQuery"
-                       @bind:event="oninput"
-                       @onkeydown="HandleSearchKeyPress" />
-                <button type="button" 
-                        class="btn btn-primary" 
-                        @onclick="SearchLocation"
-                        disabled="@isSearching">
-                    @if (isSearching)
-                    {
-                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                        <text>Searching...</text>
-                    }
-                    else
-                    {
-                        <text>Search</text>
-                    }
-                </button>
-            </div>
-            @if (!string.IsNullOrWhiteSpace(searchError))
-            {
-                <div class="alert alert-danger mt-2 mb-0" role="alert" style="width: 400px;">
-                    @searchError
+        <!-- Map view toggle and search bar on the right -->
+        <div class="d-flex align-items-center gap-2">
+            <!-- Map view toggle button -->
+            <button type="button" 
+                    class="btn @(isSatelliteView ? "btn-success" : "btn-outline-secondary")"
+                    @onclick="ToggleMapView"
+                    title="@(isSatelliteView ? "Switch to default map" : "Switch to satellite view")">
+                @if (isSatelliteView)
+                {
+                    <text>🗺️ Map</text>
+                }
+                else
+                {
+                    <text>🛰️ Satellite</text>
+                }
+            </button>
+
+            <!-- Search Bar -->
+            <div class="search-bar-container">
+                <div class="input-group" style="width: 400px;">
+                    <input type="text" 
+                           class="form-control" 
+                           placeholder="Search address or coordinates..." 
+                           @bind="searchQuery"
+                           @bind:event="oninput"
+                           @onkeydown="HandleSearchKeyPress" />
+                    <button type="button" 
+                            class="btn btn-primary" 
+                            @onclick="SearchLocation"
+                            disabled="@isSearching">
+                        @if (isSearching)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            <text>Searching...</text>
+                        }
+                        else
+                        {
+                            <text>Search</text>
+                        }
+                    </button>
                 </div>
-            }
+                @if (!string.IsNullOrWhiteSpace(searchError))
+                {
+                    <div class="alert alert-danger mt-2 mb-0" role="alert" style="width: 400px;">
+                        @searchError
+                    </div>
+                }
+            </div>
         </div>
     </div>
 
@@ -149,6 +167,11 @@ else
     /// Used to disable the search button and show a loading spinner during search.
     /// </summary>
     private bool isSearching = false;
+
+    /// <summary>
+    /// Indicates whether the map is currently displaying satellite view (true) or default map view (false).
+    /// </summary>
+    private bool isSatelliteView = false;
     
     /// <summary>
     /// Temporary storage for points collected while drawing a cable.
@@ -1386,6 +1409,35 @@ else
         {
             searchError = $"Failed to navigate to location: {ex.Message}";
             Console.WriteLine($"Navigation error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Toggles between default map view and satellite view.
+    /// </summary>
+    private async Task ToggleMapView()
+    {
+        if (module == null || mapInstance == null)
+        {
+            return;
+        }
+
+        try
+        {
+            // Toggle the view state
+            isSatelliteView = !isSatelliteView;
+
+            // Call JavaScript function to switch map layers
+            await module.InvokeVoidAsync("toggleMapView", mapInstance, isSatelliteView);
+
+            // Trigger UI update to reflect button state change
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error toggling map view: {ex.Message}");
+            // Revert state on error
+            isSatelliteView = !isSatelliteView;
         }
     }
 
