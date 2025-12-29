@@ -123,6 +123,148 @@ else
     }
 
     <div id="map" class="map-container @GetMapCursorClass()"></div>
+
+    <!-- Edit Modal for Vaults and Midpoints -->
+    @if (editingEntity != null)
+    {
+        <div class="modal-backdrop" @onclick="CloseEditModal"></div>
+        <div class="modal fade show" style="display: block;" tabindex="-1" role="dialog" @onclick:stopPropagation="true">
+            <div class="modal-dialog" role="document" @onclick:stopPropagation="true">
+                <div class="modal-content" @onclick:stopPropagation="true">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Edit @(editingEntity.Value.Type == "vault" ? "Vault" : editingEntity.Value.Type == "midpoint" ? "Midpoint" : "Cable")</h5>
+                        <button type="button" class="btn-close" @onclick="CloseEditModal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        @if (editingEntity.Value.Type == "vault" && editingVaultModel != null)
+                        {
+                            <EditForm Model="@editingVaultModel" OnValidSubmit="@SaveVaultFromModal">
+                                <DataAnnotationsValidator />
+                                <div class="mb-3">
+                                    <label for="editVaultName" class="form-label"><strong>Name:</strong></label>
+                                    <InputText id="editVaultName" class="form-control" @bind-Value="editingVaultModel.Name" />
+                                    <ValidationMessage For="@(() => editingVaultModel.Name)" />
+                                </div>
+                                <div class="mb-3">
+                                    <label for="editVaultStatus" class="form-label"><strong>Status:</strong></label>
+                                    <InputSelect id="editVaultStatus" class="form-select" @bind-Value="editingVaultModel.Status">
+                                        <option value="@VaultStatus.New">New</option>
+                                        <option value="@VaultStatus.Pending">Pending</option>
+                                        <option value="@VaultStatus.Review">Review</option>
+                                        <option value="@VaultStatus.Complete">Complete</option>
+                                        <option value="@VaultStatus.Issue">Issue</option>
+                                    </InputSelect>
+                                    <ValidationMessage For="@(() => editingVaultModel.Status)" />
+                                </div>
+                                <div class="mb-3">
+                                    <label for="editVaultDescription" class="form-label"><strong>Description:</strong></label>
+                                    <InputTextArea id="editVaultDescription" class="form-control" rows="4" @bind-Value="editingVaultModel.Description" placeholder="Enter a brief description or notes..." />
+                                    <ValidationMessage For="@(() => editingVaultModel.Description)" />
+                                </div>
+                                <div class="btn-group w-100">
+                                    <button type="submit" class="btn btn-primary" disabled="@isSavingEntity">
+                                        @if (isSavingEntity)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                            <text>Saving...</text>
+                                        }
+                                        else
+                                        {
+                                            <text>Save Changes</text>
+                                        }
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary" @onclick="CloseEditModal" disabled="@isSavingEntity">Cancel</button>
+                                </div>
+                            </EditForm>
+                        }
+                        else if (editingEntity.Value.Type == "midpoint" && editingMidpointModel != null)
+                        {
+                            <EditForm Model="@editingMidpointModel" OnValidSubmit="@SaveMidpointFromModal">
+                                <DataAnnotationsValidator />
+                                <div class="mb-3">
+                                    <label for="editMidpointName" class="form-label"><strong>Name:</strong></label>
+                                    <InputText id="editMidpointName" class="form-control" @bind-Value="editingMidpointModel.Name" />
+                                    <ValidationMessage For="@(() => editingMidpointModel.Name)" />
+                                </div>
+                                <div class="mb-3">
+                                    <label for="editMidpointStatus" class="form-label"><strong>Status:</strong></label>
+                                    <InputSelect id="editMidpointStatus" class="form-select" @bind-Value="editingMidpointModel.Status">
+                                        <option value="@MidpointStatus.New">New</option>
+                                        <option value="@MidpointStatus.Review">Review</option>
+                                        <option value="@MidpointStatus.Complete">Complete</option>
+                                        <option value="@MidpointStatus.Issue">Issue</option>
+                                    </InputSelect>
+                                    <ValidationMessage For="@(() => editingMidpointModel.Status)" />
+                                </div>
+                                <div class="mb-3">
+                                    <label for="editMidpointDescription" class="form-label"><strong>Description:</strong></label>
+                                    <InputTextArea id="editMidpointDescription" class="form-control" rows="4" @bind-Value="editingMidpointModel.Description" placeholder="Enter a brief description or notes..." />
+                                    <ValidationMessage For="@(() => editingMidpointModel.Description)" />
+                                </div>
+                                <div class="btn-group w-100">
+                                    <button type="submit" class="btn btn-primary" disabled="@isSavingEntity">
+                                        @if (isSavingEntity)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                            <text>Saving...</text>
+                                        }
+                                        else
+                                        {
+                                            <text>Save Changes</text>
+                                        }
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary" @onclick="CloseEditModal" disabled="@isSavingEntity">Cancel</button>
+                                </div>
+                            </EditForm>
+                        }
+                        else if (editingEntity.Value.Type == "cable" && editingCableModel != null)
+                        {
+                            <EditForm Model="@editingCableModel" OnValidSubmit="@SaveCableFromModal">
+                                <DataAnnotationsValidator />
+                                <div class="mb-3">
+                                    <label for="editCableName" class="form-label"><strong>Name:</strong></label>
+                                    <InputText id="editCableName" class="form-control" @bind-Value="editingCableModel.Name" />
+                                    <ValidationMessage For="@(() => editingCableModel.Name)" />
+                                </div>
+                                <div class="mb-3">
+                                    <label for="editCableDescription" class="form-label"><strong>Description:</strong></label>
+                                    <InputTextArea id="editCableDescription" class="form-control" rows="4" @bind-Value="editingCableModel.Description" placeholder="Enter a brief description or notes..." />
+                                    <ValidationMessage For="@(() => editingCableModel.Description)" />
+                                </div>
+                                <div class="mb-3">
+                                    <label for="editCableColor" class="form-label"><strong>Color:</strong></label>
+                                    <InputSelect id="editCableColor" class="form-select" @bind-Value="editingCableModel.Color">
+                                        <option value="Black">Black</option>
+                                        <option value="Blue">Blue</option>
+                                        <option value="Orange">Orange</option>
+                                        <option value="Green">Green</option>
+                                        <option value="Brown">Brown</option>
+                                        <option value="Pink">Pink</option>
+                                        <option value="Teal">Teal</option>
+                                    </InputSelect>
+                                    <ValidationMessage For="@(() => editingCableModel.Color)" />
+                                </div>
+                                <div class="btn-group w-100">
+                                    <button type="submit" class="btn btn-primary" disabled="@isSavingEntity">
+                                        @if (isSavingEntity)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                            <text>Saving...</text>
+                                        }
+                                        else
+                                        {
+                                            <text>Save Changes</text>
+                                        }
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary" @onclick="CloseEditModal" disabled="@isSavingEntity">Cancel</button>
+                                </div>
+                            </EditForm>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
 }
 
 @implements IDisposable
@@ -199,6 +341,31 @@ else
     private int? selectedCableId = null;
 
     /// <summary>
+    /// Information about the entity currently being edited in the modal (vault or midpoint).
+    /// </summary>
+    private (string Type, int Id)? editingEntity = null;
+
+    /// <summary>
+    /// Edit model for vault editing in the modal.
+    /// </summary>
+    private VaultEditModel? editingVaultModel = null;
+
+    /// <summary>
+    /// Edit model for midpoint editing in the modal.
+    /// </summary>
+    private MidpointEditModel? editingMidpointModel = null;
+
+    /// <summary>
+    /// Edit model for cable editing in the modal.
+    /// </summary>
+    private CableEditModel? editingCableModel = null;
+
+    /// <summary>
+    /// Indicates whether an entity save operation is in progress.
+    /// </summary>
+    private bool isSavingEntity = false;
+
+    /// <summary>
     /// Dictionary to store map layer references (markers, circles, polylines) with their entity IDs.
     /// Used to identify which item was clicked for deletion.
     /// Key: Entity ID (vault/midpoint/cable ID), Value: JavaScript object reference to the Leaflet layer
@@ -255,18 +422,26 @@ else
                             ? "No description provided." 
                             : System.Net.WebUtility.HtmlEncode(vault.Description);
                         string coordinates = $"{vault.Location.Y:F6}, {vault.Location.X:F6}";
-                        string popup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
-                            $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(vault.Name)}<br>" +
-                            $"<strong>Status:</strong> {vault.Status}<br>" +
-                            $"<strong>Description:</strong> {descriptionText}<br>" +
-                            $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
-                            $"<a href='vault/{vault.Id}' style='margin-top: 8px; display: inline-block;'>View Details</a>" +
-                            $"</div>";
+                        // Create a unique ID for the edit button to avoid conflicts
+                        string editButtonId = $"editVault_{vault.Id}";
+                string popup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
+                    $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(vault.Name)}<br>" +
+                    $"<strong>Status:</strong> {vault.Status}<br>" +
+                    $"<strong>Description:</strong> {descriptionText}<br>" +
+                    $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
+                    $"<div style='margin-top: 8px;'>" +
+                    $"<button id='{editButtonId}' class='btn btn-sm btn-primary me-2' style='font-size: 11px; padding: 2px 8px;'>Edit</button>" +
+                    $"<a href='vault/{vault.Id}' style='font-size: 11px;'>View Details</a>" +
+                    $"</div>" +
+                    $"</div>";
                         // Ensure we have a valid color (use status-based color if Color is not set)
                         string vaultColor = !string.IsNullOrWhiteSpace(vault.Color) ? vault.Color : GetStatusColor(vault.Status);
                         // Pass the vault's Color property to display the marker in the correct status color
                         var markerRef = await module.InvokeAsync<IJSObjectReference>("addMarker", mapInstance, vault.Location.Y, vault.Location.X, popup, vault.Id, dotNetReference, vaultColor);
                         mapLayers[$"vault_{vault.Id}"] = markerRef;
+                        
+                        // Attach edit button handler
+                        await module.InvokeVoidAsync("attachEditButtonHandler", markerRef, editButtonId, "vault", vault.Id, dotNetReference);
                     }
                 }
 
@@ -280,18 +455,26 @@ else
                             ? "No description provided." 
                             : System.Net.WebUtility.HtmlEncode(mp.Description);
                         string coordinates = $"{mp.Location.Y:F6}, {mp.Location.X:F6}";
-                        string popup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
-                            $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(mp.Name)}<br>" +
-                            $"<strong>Status:</strong> {mp.Status}<br>" +
-                            $"<strong>Description:</strong> {descriptionText}<br>" +
-                            $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
-                            $"<a href='midpoint/{mp.Id}' style='margin-top: 8px; display: inline-block;'>View Details</a>" +
-                            $"</div>";
+                        // Create a unique ID for the edit button to avoid conflicts
+                        string editButtonId = $"editMidpoint_{mp.Id}";
+                string popup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
+                    $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(mp.Name)}<br>" +
+                    $"<strong>Status:</strong> {mp.Status}<br>" +
+                    $"<strong>Description:</strong> {descriptionText}<br>" +
+                    $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
+                    $"<div style='margin-top: 8px;'>" +
+                    $"<button id='{editButtonId}' class='btn btn-sm btn-primary me-2' style='font-size: 11px; padding: 2px 8px;'>Edit</button>" +
+                    $"<a href='midpoint/{mp.Id}' style='font-size: 11px;'>View Details</a>" +
+                    $"</div>" +
+                    $"</div>";
                         // Ensure we have a valid color (use status-based color if Color is not set)
                         string midpointColor = !string.IsNullOrWhiteSpace(mp.Color) ? mp.Color : GetMidpointStatusColor(mp.Status);
                         // Pass the midpoint's Color property to display the marker in the correct status color
                         var circleRef = await module.InvokeAsync<IJSObjectReference>("addCircle", mapInstance, mp.Location.Y, mp.Location.X, midpointColor, popup, mp.Id, dotNetReference);
                         mapLayers[$"midpoint_{mp.Id}"] = circleRef;
+                        
+                        // Attach edit button handler
+                        await module.InvokeVoidAsync("attachEditButtonHandler", circleRef, editButtonId, "midpoint", mp.Id, dotNetReference);
                     }
                 }
 
@@ -626,21 +809,28 @@ else
             if (createdMidpoint != null && createdMidpoint.Location != null && dotNetReference != null)
             {
                 // Add circle to map immediately and store reference for deletion
-                // Build popup content with labeled fields: Name, Status, Description, Coordinates, and link to details
+                // Build popup content with labeled fields: Name, Status, Description, Coordinates, Edit button, and link to details
                 string descriptionText = string.IsNullOrWhiteSpace(createdMidpoint.Description) 
                     ? "No description provided." 
                     : System.Net.WebUtility.HtmlEncode(createdMidpoint.Description);
                 string coordinates = $"{createdMidpoint.Location.Y:F6}, {createdMidpoint.Location.X:F6}";
+                string editButtonId = $"editMidpoint_{createdMidpoint.Id}";
                 string popup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
                     $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(createdMidpoint.Name)}<br>" +
                     $"<strong>Status:</strong> {createdMidpoint.Status}<br>" +
                     $"<strong>Description:</strong> {descriptionText}<br>" +
                     $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
-                    $"<a href='midpoint/{createdMidpoint.Id}' style='margin-top: 8px; display: inline-block;'>View Details</a>" +
+                    $"<div style='margin-top: 8px;'>" +
+                    $"<button id='{editButtonId}' class='btn btn-sm btn-primary me-2' style='font-size: 11px; padding: 2px 8px;'>Edit</button>" +
+                    $"<a href='midpoint/{createdMidpoint.Id}' style='font-size: 11px;'>View Details</a>" +
+                    $"</div>" +
                     $"</div>";
                 // Pass the midpoint's Color property to display the marker in the correct status color
                 var circleRef = await module.InvokeAsync<IJSObjectReference>("addCircle", mapInstance, createdMidpoint.Location.Y, createdMidpoint.Location.X, createdMidpoint.Color, popup, createdMidpoint.Id, dotNetReference);
                 mapLayers[$"midpoint_{createdMidpoint.Id}"] = circleRef;
+                
+                // Attach edit button handler
+                await module.InvokeVoidAsync("attachEditButtonHandler", circleRef, editButtonId, "midpoint", createdMidpoint.Id, dotNetReference);
 
                 // Refresh the midpoints list
                 await LoadMidpoints();
@@ -816,12 +1006,16 @@ else
             ? "No description provided." 
             : System.Net.WebUtility.HtmlEncode(cable.Description);
         string lengthText = GetCableLengthForPopup(cable);
+        string editButtonId = $"editCable_{cable.Id}";
         string popup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
             $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(cable.Name)}<br>" +
             $"<strong>Description:</strong> {descriptionText}<br>" +
             $"<strong>Color:</strong> {cable.Color}<br>" +
             $"<strong>Length:</strong> {lengthText}<br>" +
-            $"<a href='cable/{cable.Id}' style='margin-top: 8px; display: inline-block;'>View Details</a>" +
+            $"<div style='margin-top: 8px;'>" +
+            $"<button id='{editButtonId}' class='btn btn-sm btn-primary me-2' style='font-size: 11px; padding: 2px 8px;'>Edit</button>" +
+            $"<a href='cable/{cable.Id}' style='font-size: 11px;'>View Details</a>" +
+            $"</div>" +
             $"</div>";
 
         // Draw the polyline with drag support
@@ -847,6 +1041,9 @@ else
         }
         
         cableVertexMarkers[cable.Id] = vertexMarkers;
+        
+        // Attach edit button handler for cable popup
+        await module.InvokeVoidAsync("attachEditButtonHandler", polylineRef, editButtonId, "cable", cable.Id, dotNetReference);
         
         // Hide vertex markers by default (only show when cable is selected or dragging)
         // Only show if this cable is currently selected
@@ -1116,12 +1313,16 @@ else
                     ? "No description provided." 
                     : System.Net.WebUtility.HtmlEncode(updatedVault.Description);
                 string coordinates = $"{newLat:F6}, {newLng:F6}";
+                string editButtonId = $"editVault_{vaultId}";
                 string newPopup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
                     $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(updatedVault.Name)}<br>" +
                     $"<strong>Status:</strong> {updatedVault.Status}<br>" +
                     $"<strong>Description:</strong> {descriptionText}<br>" +
                     $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
-                    $"<a href='vault/{updatedVault.Id}' style='margin-top: 8px; display: inline-block;'>View Details</a>" +
+                    $"<div style='margin-top: 8px;'>" +
+                    $"<button id='{editButtonId}' class='btn btn-sm btn-primary me-2' style='font-size: 11px; padding: 2px 8px;'>Edit</button>" +
+                    $"<a href='vault/{updatedVault.Id}' style='font-size: 11px;'>View Details</a>" +
+                    $"</div>" +
                     $"</div>";
                 
                 // Update the marker's popup content
@@ -1129,6 +1330,8 @@ else
                 if (mapLayers.ContainsKey(layerKey))
                 {
                     await module.InvokeVoidAsync("updateMarkerPopup", mapLayers[layerKey], newPopup);
+                    // Re-attach edit button handler after popup update
+                    await module.InvokeVoidAsync("attachEditButtonHandler", mapLayers[layerKey], editButtonId, "vault", vaultId, dotNetReference);
                 }
 
                 // Refresh the vaults list to get updated data
@@ -1195,12 +1398,16 @@ else
                     ? "No description provided." 
                     : System.Net.WebUtility.HtmlEncode(updatedMidpoint.Description);
                 string coordinates = $"{newLat:F6}, {newLng:F6}";
+                string editButtonId = $"editMidpoint_{midpointId}";
                 string newPopup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
                     $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(updatedMidpoint.Name)}<br>" +
                     $"<strong>Status:</strong> {updatedMidpoint.Status}<br>" +
                     $"<strong>Description:</strong> {descriptionText}<br>" +
                     $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
-                    $"<a href='midpoint/{updatedMidpoint.Id}' style='margin-top: 8px; display: inline-block;'>View Details</a>" +
+                    $"<div style='margin-top: 8px;'>" +
+                    $"<button id='{editButtonId}' class='btn btn-sm btn-primary me-2' style='font-size: 11px; padding: 2px 8px;'>Edit</button>" +
+                    $"<a href='midpoint/{updatedMidpoint.Id}' style='font-size: 11px;'>View Details</a>" +
+                    $"</div>" +
                     $"</div>";
                 
                 // Update the marker's popup content
@@ -1208,6 +1415,8 @@ else
                 if (mapLayers.ContainsKey(layerKey))
                 {
                     await module.InvokeVoidAsync("updateMarkerPopup", mapLayers[layerKey], newPopup);
+                    // Re-attach edit button handler after popup update
+                    await module.InvokeVoidAsync("attachEditButtonHandler", mapLayers[layerKey], editButtonId, "midpoint", midpointId, dotNetReference);
                 }
 
                 // Refresh the midpoints list to get updated data
@@ -1656,6 +1865,438 @@ else
         {
             Console.WriteLine($"Error moving cable: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Opens the edit modal for a vault or midpoint.
+    /// </summary>
+    /// <param name="entityType">The type of entity: "vault" or "midpoint"</param>
+    /// <param name="entityId">The ID of the entity to edit</param>
+    [JSInvokable]
+    public async Task OpenEditModal(string entityType, int entityId)
+    {
+        try
+        {
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            options.Converters.Add(new GeoJsonConverterFactory());
+
+            if (entityType.ToLower() == "vault")
+            {
+                var vault = await Http.GetFromJsonAsync<Vault>($"api/vaults/{entityId}", options);
+                if (vault != null)
+                {
+                    editingEntity = ("vault", entityId);
+                    editingVaultModel = new VaultEditModel
+                    {
+                        Id = vault.Id,
+                        Name = vault.Name ?? string.Empty,
+                        Status = vault.Status,
+                        Description = vault.Description ?? string.Empty
+                    };
+                    editingMidpointModel = null;
+                    editingCableModel = null;
+                }
+            }
+            else if (entityType.ToLower() == "midpoint")
+            {
+                var midpoint = await Http.GetFromJsonAsync<Midpoint>($"api/midpoints/{entityId}", options);
+                if (midpoint != null)
+                {
+                    editingEntity = ("midpoint", entityId);
+                    editingMidpointModel = new MidpointEditModel
+                    {
+                        Id = midpoint.Id,
+                        Name = midpoint.Name ?? string.Empty,
+                        Status = midpoint.Status,
+                        Description = midpoint.Description ?? string.Empty
+                    };
+                    editingVaultModel = null;
+                    editingCableModel = null;
+                }
+            }
+            else if (entityType.ToLower() == "cable")
+            {
+                var cable = await Http.GetFromJsonAsync<Cable>($"api/cables/{entityId}", options);
+                if (cable != null)
+                {
+                    editingEntity = ("cable", entityId);
+                    editingCableModel = new CableEditModel
+                    {
+                        Id = cable.Id,
+                        Name = cable.Name ?? string.Empty,
+                        Description = cable.Description ?? string.Empty,
+                        Color = cable.Color ?? "Black"
+                    };
+                    editingVaultModel = null;
+                    editingMidpointModel = null;
+                }
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error opening edit modal: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Failed to load {entityType} for editing. Error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Closes the edit modal and clears the edit models.
+    /// </summary>
+    private void CloseEditModal()
+    {
+        editingEntity = null;
+        editingVaultModel = null;
+        editingMidpointModel = null;
+        editingCableModel = null;
+        isSavingEntity = false;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Saves vault changes from the modal and updates the map popup.
+    /// </summary>
+    /// <summary>
+    /// Saves vault changes from the modal and updates the map popup.
+    /// </summary>
+    private async Task SaveVaultFromModal()
+    {
+        if (editingVaultModel == null || editingEntity == null || editingEntity.Value.Type != "vault")
+            return;
+
+        isSavingEntity = true;
+        StateHasChanged();
+
+        try
+        {
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            options.Converters.Add(new GeoJsonConverterFactory());
+
+            // Get the current vault to preserve Location
+            var currentVault = await Http.GetFromJsonAsync<Vault>($"api/vaults/{editingVaultModel.Id}", options);
+            if (currentVault == null) return;
+
+            // Update vault properties
+            currentVault.Name = editingVaultModel.Name;
+            currentVault.Status = editingVaultModel.Status;
+            currentVault.Description = editingVaultModel.Description;
+
+            // Send PUT request
+            var response = await Http.PutAsJsonAsync($"api/vaults/{editingVaultModel.Id}", currentVault, options);
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Reload vaults to get updated data
+                await LoadVaults();
+
+                // Update the popup on the map
+                await UpdateVaultPopup(editingVaultModel.Id);
+
+                // Close modal
+                CloseEditModal();
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", "Failed to save vault changes.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving vault: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Failed to save vault. Error: {ex.Message}");
+        }
+        finally
+        {
+            isSavingEntity = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Saves midpoint changes from the modal and updates the map popup.
+    /// </summary>
+    /// <summary>
+    /// Saves midpoint changes from the modal and updates the map popup.
+    /// </summary>
+    private async Task SaveMidpointFromModal()
+    {
+        if (editingMidpointModel == null || editingEntity == null || editingEntity.Value.Type != "midpoint")
+            return;
+
+        isSavingEntity = true;
+        StateHasChanged();
+
+        try
+        {
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            options.Converters.Add(new GeoJsonConverterFactory());
+
+            // Get the current midpoint to preserve Location
+            var currentMidpoint = await Http.GetFromJsonAsync<Midpoint>($"api/midpoints/{editingMidpointModel.Id}", options);
+            if (currentMidpoint == null) return;
+
+            // Update midpoint properties
+            currentMidpoint.Name = editingMidpointModel.Name;
+            currentMidpoint.Status = editingMidpointModel.Status;
+            currentMidpoint.Description = editingMidpointModel.Description;
+
+            // Send PUT request
+            var response = await Http.PutAsJsonAsync($"api/midpoints/{editingMidpointModel.Id}", currentMidpoint, options);
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Reload midpoints to get updated data
+                await LoadMidpoints();
+
+                // Update the popup on the map
+                await UpdateMidpointPopup(editingMidpointModel.Id);
+
+                // Close modal
+                CloseEditModal();
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", "Failed to save midpoint changes.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving midpoint: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Failed to save midpoint. Error: {ex.Message}");
+        }
+        finally
+        {
+            isSavingEntity = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Updates the popup content and marker color for a vault after editing.
+    /// </summary>
+    /// <param name="vaultId">The ID of the vault to update</param>
+    private async Task UpdateVaultPopup(int vaultId)
+    {
+        if (module == null || mapInstance == null || !mapLayers.ContainsKey($"vault_{vaultId}"))
+            return;
+
+        try
+        {
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            options.Converters.Add(new GeoJsonConverterFactory());
+            var vault = await Http.GetFromJsonAsync<Vault>($"api/vaults/{vaultId}", options);
+
+            if (vault != null && vault.Location != null)
+            {
+                // Build updated popup content
+                string descriptionText = string.IsNullOrWhiteSpace(vault.Description) 
+                    ? "No description provided." 
+                    : System.Net.WebUtility.HtmlEncode(vault.Description);
+                string coordinates = $"{vault.Location.Y:F6}, {vault.Location.X:F6}";
+                string editButtonId = $"editVault_{vault.Id}";
+                string popup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
+                    $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(vault.Name)}<br>" +
+                    $"<strong>Status:</strong> {vault.Status}<br>" +
+                    $"<strong>Description:</strong> {descriptionText}<br>" +
+                    $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
+                    $"<div style='margin-top: 8px;'>" +
+                    $"<button id='{editButtonId}' class='btn btn-sm btn-primary me-2' style='font-size: 11px; padding: 2px 8px;'>Edit</button>" +
+                    $"<a href='vault/{vault.Id}' style='font-size: 11px;'>View Details</a>" +
+                    $"</div>" +
+                    $"</div>";
+                
+                // Get the updated color (API should have updated it based on status)
+                string vaultColor = !string.IsNullOrWhiteSpace(vault.Color) ? vault.Color : GetStatusColor(vault.Status);
+                
+                // Remove the old marker
+                await module.InvokeVoidAsync("removeLayer", mapInstance, mapLayers[$"vault_{vaultId}"]);
+                
+                // Create a new marker with updated color and popup
+                var newMarkerRef = await module.InvokeAsync<IJSObjectReference>("addMarker", mapInstance, vault.Location.Y, vault.Location.X, popup, vault.Id, dotNetReference, vaultColor);
+                mapLayers[$"vault_{vaultId}"] = newMarkerRef;
+                
+                // Attach edit button handler
+                await module.InvokeVoidAsync("attachEditButtonHandler", newMarkerRef, editButtonId, "vault", vaultId, dotNetReference);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating vault popup: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Updates the popup content and marker color for a midpoint after editing.
+    /// </summary>
+    /// <param name="midpointId">The ID of the midpoint to update</param>
+    private async Task UpdateMidpointPopup(int midpointId)
+    {
+        if (module == null || mapInstance == null || !mapLayers.ContainsKey($"midpoint_{midpointId}"))
+            return;
+
+        try
+        {
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            options.Converters.Add(new GeoJsonConverterFactory());
+            var midpoint = await Http.GetFromJsonAsync<Midpoint>($"api/midpoints/{midpointId}", options);
+
+            if (midpoint != null && midpoint.Location != null)
+            {
+                // Build updated popup content
+                string descriptionText = string.IsNullOrWhiteSpace(midpoint.Description) 
+                    ? "No description provided." 
+                    : System.Net.WebUtility.HtmlEncode(midpoint.Description);
+                string coordinates = $"{midpoint.Location.Y:F6}, {midpoint.Location.X:F6}";
+                string editButtonId = $"editMidpoint_{midpointId}";
+                string popup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
+                    $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(midpoint.Name)}<br>" +
+                    $"<strong>Status:</strong> {midpoint.Status}<br>" +
+                    $"<strong>Description:</strong> {descriptionText}<br>" +
+                    $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
+                    $"<div style='margin-top: 8px;'>" +
+                    $"<button id='{editButtonId}' class='btn btn-sm btn-primary me-2' style='font-size: 11px; padding: 2px 8px;'>Edit</button>" +
+                    $"<a href='midpoint/{midpoint.Id}' style='font-size: 11px;'>View Details</a>" +
+                    $"</div>" +
+                    $"</div>";
+
+                // Get the updated color (API should have updated it based on status)
+                string midpointColor = !string.IsNullOrWhiteSpace(midpoint.Color) ? midpoint.Color : GetMidpointStatusColor(midpoint.Status);
+                
+                // Remove the old marker
+                await module.InvokeVoidAsync("removeLayer", mapInstance, mapLayers[$"midpoint_{midpointId}"]);
+                
+                // Create a new marker with updated color and popup
+                var newMarkerRef = await module.InvokeAsync<IJSObjectReference>("addCircle", mapInstance, midpoint.Location.Y, midpoint.Location.X, midpointColor, popup, midpoint.Id, dotNetReference);
+                mapLayers[$"midpoint_{midpointId}"] = newMarkerRef;
+                
+                // Attach edit button handler
+                await module.InvokeVoidAsync("attachEditButtonHandler", newMarkerRef, editButtonId, "midpoint", midpointId, dotNetReference);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating midpoint popup: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Edit model for vault editing in the modal.
+    /// </summary>
+    private class VaultEditModel
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public VaultStatus Status { get; set; }
+        public string? Description { get; set; }
+    }
+
+    /// <summary>
+    /// Edit model for midpoint editing in the modal.
+    /// </summary>
+    private class MidpointEditModel
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public MidpointStatus Status { get; set; }
+        public string? Description { get; set; }
+    }
+
+    /// <summary>
+    /// Saves cable changes from the modal and updates the map popup and polyline color.
+    /// </summary>
+    private async Task SaveCableFromModal()
+    {
+        if (editingCableModel == null || editingEntity == null || editingEntity.Value.Type != "cable")
+            return;
+
+        isSavingEntity = true;
+        StateHasChanged();
+
+        try
+        {
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            options.Converters.Add(new GeoJsonConverterFactory());
+
+            // Get the current cable to preserve Path
+            var currentCable = await Http.GetFromJsonAsync<Cable>($"api/cables/{editingCableModel.Id}", options);
+            if (currentCable == null) return;
+
+            // Update cable properties
+            currentCable.Name = editingCableModel.Name;
+            currentCable.Description = editingCableModel.Description;
+            currentCable.Color = editingCableModel.Color;
+
+            // Send PUT request
+            var response = await Http.PutAsJsonAsync($"api/cables/{editingCableModel.Id}", currentCable, options);
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Reload cables to get updated data
+                await LoadCables();
+
+                // Update the cable on the map (this will update color and popup)
+                await UpdateCablePopup(editingCableModel.Id);
+
+                // Close modal
+                CloseEditModal();
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", "Failed to save cable changes.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving cable: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Failed to save cable. Error: {ex.Message}");
+        }
+        finally
+        {
+            isSavingEntity = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Updates the cable polyline and popup after editing.
+    /// </summary>
+    /// <param name="cableId">The ID of the cable to update</param>
+    private async Task UpdateCablePopup(int cableId)
+    {
+        if (module == null || mapInstance == null || !mapLayers.ContainsKey($"cable_{cableId}"))
+            return;
+
+        try
+        {
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            options.Converters.Add(new GeoJsonConverterFactory());
+            var cable = await Http.GetFromJsonAsync<Cable>($"api/cables/{cableId}", options);
+
+            if (cable != null && cable.Path != null)
+            {
+                // Redraw the cable with updated properties (this updates color and popup)
+                // Preserve selection state
+                int? previousSelectedId = selectedCableId;
+                await DrawCableWithVertices(cable);
+                selectedCableId = previousSelectedId;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating cable popup: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Edit model for cable editing in the modal.
+    /// </summary>
+    private class CableEditModel
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public string Color { get; set; } = "Black";
     }
 
     /// <summary>

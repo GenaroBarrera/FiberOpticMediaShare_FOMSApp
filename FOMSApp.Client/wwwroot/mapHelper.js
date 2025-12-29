@@ -132,6 +132,21 @@ export function addMarker(map, lat, lng, popupText, entityId, dotNetReference, c
     var marker = L.marker([lat, lng], { icon: icon, draggable: true }).addTo(map);
     marker.bindPopup(popupText); // Add a popup to the marker
     
+    // Add event listener for Edit button clicks in the popup
+    marker.on('popupopen', function() {
+        // Wait for popup to be added to DOM, then attach click handler to Edit button
+        setTimeout(function() {
+            var editButton = document.getElementById('editVault_' + entityId);
+            if (editButton && dotNetReference) {
+                editButton.onclick = function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dotNetReference.invokeMethodAsync('OpenEditModal', 'vault', entityId);
+                };
+            }
+        }, 100);
+    });
+    
     // If entityId and dotNetReference are provided, add click handler for deletion and drag handler for moving
     if (entityId && dotNetReference) {
         // Override the default click behavior to handle delete mode
@@ -224,6 +239,21 @@ export function addCircle(map, lat, lng, color, popupText, entityId, dotNetRefer
         circleMarker.bindPopup(popupText);
     }
     
+    // Add event listener for Edit button clicks in the popup
+    circleMarker.on('popupopen', function() {
+        // Wait for popup to be added to DOM, then attach click handler to Edit button
+        setTimeout(function() {
+            var editButton = document.getElementById('editMidpoint_' + entityId);
+            if (editButton && dotNetReference) {
+                editButton.onclick = function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dotNetReference.invokeMethodAsync('OpenEditModal', 'midpoint', entityId);
+                };
+            }
+        }, 100);
+    });
+    
     // If entityId and dotNetReference are provided, add click handler for deletion and drag handler for moving
     if (entityId && dotNetReference) {
         // Override the default click behavior to handle delete mode
@@ -310,6 +340,39 @@ export function hideLayer(map, layer) {
 // Used after moving a marker to update the coordinates displayed in the popup
 export function updateMarkerPopup(marker, newPopupText) {
     marker.setPopupContent(newPopupText);
+}
+
+// Function to attach click handler to Edit button in popup
+// This is needed because popup content is dynamically generated HTML
+export function attachEditButtonHandler(marker, buttonId, entityType, entityId, dotNetReference) {
+    // Wait for popup to be added to DOM, then attach click handler
+    marker.on('popupopen', function() {
+        setTimeout(function() {
+            var editButton = document.getElementById(buttonId);
+            if (editButton && dotNetReference) {
+                // Remove any existing handler to avoid duplicates
+                editButton.onclick = null;
+                editButton.onclick = function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dotNetReference.invokeMethodAsync('OpenEditModal', entityType, entityId);
+                };
+            }
+        }, 100);
+    });
+    
+    // Also try to attach immediately if popup is already open
+    setTimeout(function() {
+        var editButton = document.getElementById(buttonId);
+        if (editButton && dotNetReference) {
+            editButton.onclick = null;
+            editButton.onclick = function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                dotNetReference.invokeMethodAsync('OpenEditModal', entityType, entityId);
+            };
+        }
+    }, 200);
 }
 
 // Function to navigate the map to a specific location
