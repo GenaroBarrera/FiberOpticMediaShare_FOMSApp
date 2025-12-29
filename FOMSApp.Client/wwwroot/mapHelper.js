@@ -241,3 +241,213 @@ export function navigateToLocation(map, lat, lng) {
         duration: 1.0 // Animation duration in seconds
     });
 }
+
+// Function to create a white circle marker for cable vertices
+// These markers are visible at each point of the cable (similar to Google My Maps)
+export function addCableVertexMarker(map, lat, lng) {
+    // Create a white circle marker with a border
+    var marker = L.circleMarker([lat, lng], {
+        radius: 6,
+        fillColor: '#ffffff',
+        color: '#333333',
+        weight: 2,
+        opacity: 1,
+        fillOpacity: 1
+    }).addTo(map);
+    
+    return marker;
+}
+
+// Function to add an editable polyline with drag support for the entire cable
+// Returns the polyline so it can be stored and deleted later
+export function addEditablePolyline(map, coordinates, color, popupText, entityId, dotNetReference) {
+    // Map color names to hex values
+    var colorMap = {
+        'Black': '#000000',
+        'Blue': '#0066CC',
+        'Orange': '#FF6600',
+        'Green': '#28A745',
+        'Brown': '#8B4513',
+        'Pink': '#FF69B4',
+        'Teal': '#008080'
+    };
+    
+    var hexColor = colorMap[color] || color || '#000000';
+    
+    var polyline = L.polyline(coordinates, {
+        color: hexColor,
+        weight: 4,
+        opacity: 0.8
+    }).addTo(map);
+
+    if (popupText) {
+        polyline.bindPopup(popupText);
+    }
+    
+    // Store the original coordinates for drag calculation
+    var originalLatLngs = coordinates.map(function(coord) {
+        return L.latLng(coord.lat, coord.lng);
+    });
+    
+    // Track drag state
+    var isDragging = false;
+    var dragStartMouseLatLng = null;
+    
+    // Store reference to vertex markers (will be set by makeVertexDraggable)
+    polyline._vertexMarkers = [];
+    
+    // Add mousedown event to start dragging the entire cable
+    polyline.on('mousedown', function(e) {
+        if (!isDeleteMode) {
+            isDragging = true;
+            dragStartMouseLatLng = L.latLng(e.latlng.lat, e.latlng.lng);
+            map.dragging.disable(); // Disable map dragging while dragging the cable
+            L.DomEvent.stop(e); // Prevent event propagation
+        }
+    });
+    
+    // Add mousemove event to update polyline position while dragging
+    var mousemoveHandler = function(e) {
+        if (isDragging && !isDeleteMode) {
+            var currentLatLng = e.latlng;
+            var deltaLat = currentLatLng.lat - dragStartMouseLatLng.lat;
+            var deltaLng = currentLatLng.lng - dragStartMouseLatLng.lng;
+            
+            // Update all coordinates
+            var newLatLngs = originalLatLngs.map(function(latLng) {
+                return L.latLng(latLng.lat + deltaLat, latLng.lng + deltaLng);
+            });
+            
+            polyline.setLatLngs(newLatLngs);
+            
+            // Update vertex markers position
+            if (polyline._vertexMarkers) {
+                polyline._vertexMarkers.forEach(function(marker, index) {
+                    if (marker && newLatLngs[index]) {
+                        marker.setLatLng(newLatLngs[index]);
+                    }
+                });
+            }
+        }
+    };
+    
+    map.on('mousemove', mousemoveHandler);
+    
+    // Store handler for cleanup
+    polyline._mousemoveHandler = mousemoveHandler;
+    
+    // Add mouseup event to end dragging
+    var mouseupHandler = function(e) {
+        if (isDragging && !isDeleteMode) {
+            isDragging = false;
+            map.dragging.enable(); // Re-enable map dragging
+            
+            var currentLatLng = e.latlng;
+            var deltaLat = currentLatLng.lat - dragStartMouseLatLng.lat;
+            var deltaLng = currentLatLng.lng - dragStartMouseLatLng.lng;
+            
+            // Update original coordinates for next drag
+            originalLatLngs = polyline.getLatLngs();
+            
+            // Call C# method to update the cable in the database
+            if (dotNetReference && (Math.abs(deltaLat) > 0.000001 || Math.abs(deltaLng) > 0.000001)) {
+                dotNetReference.invokeMethodAsync('OnCableDragEnd', entityId, deltaLat, deltaLng);
+            }
+        }
+    };
+    
+    map.on('mouseup', mouseupHandler);
+    
+    // Store handler for cleanup
+    polyline._mouseupHandler = mouseupHandler;
+    
+    // If entityId and dotNetReference are provided, add click handler for deletion
+    if (entityId && dotNetReference) {
+        polyline.on('click', function(e) {
+            if (isDeleteMode) {
+                L.DomEvent.stop(e);
+                // Call C# method to handle the click (for deletion mode)
+                dotNetReference.invokeMethodAsync('OnEntityClick', 'cable', entityId);
+            }
+        });
+    }
+    
+    // Store original coordinates on the polyline for vertex updates
+    polyline._originalLatLngs = originalLatLngs;
+    
+    return polyline;
+}
+
+// Function to make a vertex marker draggable and connect it to a polyline
+// When the vertex is dragged, it updates the polyline and calls C# to update the database
+export function makeVertexDraggable(map, vertexMarker, cableId, vertexIndex, polyline, dotNetReference) {
+    // Make the marker draggable (circleMarker doesn't support draggable option, so we need to use a different approach)
+    // Convert to a marker for draggability
+    var latLng = vertexMarker.getLatLng();
+    var draggableMarker = L.marker(latLng, {
+        draggable: true,
+        icon: L.divIcon({
+            className: 'cable-vertex-marker',
+            html: '<div style="width: 12px; height: 12px; border-radius: 50%; background-color: #ffffff; border: 2px solid #333333; cursor: move;"></div>',
+            iconSize: [12, 12],
+            iconAnchor: [6, 6]
+        })
+    }).addTo(map);
+    
+    // Remove the original circle marker
+    map.removeLayer(vertexMarker);
+    
+    // Track the cable and vertex info
+    draggableMarker._cableId = cableId;
+    draggableMarker._vertexIndex = vertexIndex;
+    draggableMarker._polyline = polyline;
+    
+    // Add to polyline's vertex markers array
+    if (!polyline._vertexMarkers) {
+        polyline._vertexMarkers = [];
+    }
+    polyline._vertexMarkers[vertexIndex] = draggableMarker;
+    
+    // Handle drag start
+    draggableMarker.on('dragstart', function(e) {
+        map.dragging.disable(); // Disable map dragging while dragging the vertex
+    });
+    
+    // Handle drag - update the polyline in real-time
+    draggableMarker.on('drag', function(e) {
+        if (polyline) {
+            var newLatLng = draggableMarker.getLatLng();
+            var latLngs = polyline.getLatLngs();
+            
+            // Update the coordinate at the vertex index
+            if (latLngs && latLngs[vertexIndex] !== undefined) {
+                latLngs[vertexIndex] = newLatLng;
+                polyline.setLatLngs(latLngs);
+            }
+        }
+    });
+    
+    // Handle drag end - update the database
+    draggableMarker.on('dragend', function(e) {
+        map.dragging.enable(); // Re-enable map dragging
+        
+        var newLatLng = draggableMarker.getLatLng();
+        var newLat = newLatLng.lat;
+        var newLng = newLatLng.lng;
+        
+        // Call C# method to update the cable vertex in the database
+        if (dotNetReference) {
+            dotNetReference.invokeMethodAsync('OnCableVertexDragEnd', cableId, vertexIndex, newLat, newLng);
+        }
+    });
+    
+    // Prevent vertex marker clicks from triggering cable deletion
+    draggableMarker.on('click', function(e) {
+        if (isDeleteMode) {
+            L.DomEvent.stop(e);
+            // Don't delete on vertex click - only on cable line click
+        }
+    });
+    
+    return draggableMarker;
+}

@@ -1,4 +1,4 @@
-@page "/"
+﻿@page "/"
 @using FOMSApp.Shared.Models
 @using Microsoft.JSInterop
 @using System.Text.Json
@@ -6,6 +6,7 @@
 @using NetTopologySuite.IO.Converters
 @using NetTopologySuite.Geometries
 @using NetTopologySuite
+@using System.Linq
 @inject HttpClient Http
 @inject IJSRuntime JS
 
@@ -157,6 +158,16 @@ else
     private IJSObjectReference? tempCablePolyline;
 
     /// <summary>
+    /// Temporary markers for cable points while drawing (white circles).
+    /// </summary>
+    private List<IJSObjectReference> tempCableMarkers = new();
+
+    /// <summary>
+    /// Dictionary to store vertex markers for each cable (key: cableId, value: list of vertex markers).
+    /// </summary>
+    private Dictionary<int, List<IJSObjectReference>> cableVertexMarkers = new();
+
+    /// <summary>
     /// Dictionary to store map layer references (markers, circles, polylines) with their entity IDs.
     /// Used to identify which item was clicked for deletion.
     /// Key: Entity ID (vault/midpoint/cable ID), Value: JavaScript object reference to the Leaflet layer
@@ -253,34 +264,12 @@ else
                     }
                 }
 
-                // 3. Draw CABLES (Lines) - Store layer references for deletion
+                // 3. Draw CABLES (Lines) with editable vertices - Store layer references for deletion
                 foreach (var cable in cables)
                 {
                     if (cable.Path != null)
                     {
-                        // Convert NetTopologySuite points (Lng/Lat) to Leaflet objects (Lat/Lng)
-                        var latLngs = new List<object>();
-                        foreach (var coord in cable.Path.Coordinates)
-                        {
-                            latLngs.Add(new { lat = coord.Y, lng = coord.X });
-                        }
-
-                        // Build popup content with labeled fields: Name, Description, Color, Length, and link to details
-                        string descriptionText = string.IsNullOrWhiteSpace(cable.Description) 
-                            ? "No description provided." 
-                            : System.Net.WebUtility.HtmlEncode(cable.Description);
-                        string lengthText = GetCableLengthForPopup(cable);
-                        string popup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
-                            $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(cable.Name)}<br>" +
-                            $"<strong>Description:</strong> {descriptionText}<br>" +
-                            $"<strong>Color:</strong> {cable.Color}<br>" +
-                            $"<strong>Length:</strong> {lengthText}<br>" +
-                            $"<a href='cable/{cable.Id}' style='margin-top: 8px; display: inline-block;'>View Details</a>" +
-                            $"</div>";
-
-                        // Call the JS function and store the reference
-                        var polylineRef = await module.InvokeAsync<IJSObjectReference>("addPolyline", mapInstance, latLngs, cable.Color, popup, cable.Id, dotNetReference);
-                        mapLayers[$"cable_{cable.Id}"] = polylineRef;
+                        await DrawCableWithVertices(cable);
                     }
                 }
             }
@@ -597,6 +586,7 @@ else
 
     /// <summary>
     /// Adds a point to the current cable being drawn and updates the preview polyline.
+    /// Shows white circle markers at each point as it's added (similar to Google My Maps).
     /// </summary>
     /// <param name="lat">Latitude of the point.</param>
     /// <param name="lng">Longitude of the point.</param>
@@ -606,6 +596,10 @@ else
 
         // Add point to collection
         cablePoints.Add((lat, lng));
+
+        // Add a white circle marker at this point (visible vertex)
+        var marker = await module.InvokeAsync<IJSObjectReference>("addCableVertexMarker", mapInstance, lat, lng);
+        tempCableMarkers.Add(marker);
 
         // If we have at least 2 points, draw/update the preview polyline
         if (cablePoints.Count >= 2)
@@ -621,11 +615,6 @@ else
             
             // Draw preview polyline in orange
             tempCablePolyline = await module.InvokeAsync<IJSObjectReference>("addPolyline", mapInstance, latLngs, "Orange", "Preview - Click 'Finish Cable' to save");
-        }
-        else if (cablePoints.Count == 1)
-        {
-            // Show first point as a marker
-            await module.InvokeVoidAsync("addMarker", mapInstance, lat, lng, "Start point - Click more points to draw cable");
         }
     }
 
@@ -674,36 +663,22 @@ else
             
             if (createdCable != null && createdCable.Path != null && module != null && mapInstance != null)
             {
-                // Remove preview polyline
+                // Remove preview polyline and temporary markers
                 if (tempCablePolyline != null)
                 {
                     await module.InvokeVoidAsync("removeLayer", mapInstance, tempCablePolyline);
                     tempCablePolyline = null;
                 }
+                
+                // Remove all temporary markers
+                foreach (var marker in tempCableMarkers)
+                {
+                    await module.InvokeVoidAsync("removeLayer", mapInstance, marker);
+                }
+                tempCableMarkers.Clear();
 
-                // Draw the saved cable and store reference for deletion
-                var latLngs = new List<object>();
-                foreach (var coord in createdCable.Path.Coordinates)
-                {
-                    latLngs.Add(new { lat = coord.Y, lng = coord.X });
-                }
-                if (dotNetReference != null)
-                {
-                    // Build popup content with labeled fields: Name, Description, Color, Length, and link to details
-                    string descriptionText = string.IsNullOrWhiteSpace(createdCable.Description) 
-                        ? "No description provided." 
-                        : System.Net.WebUtility.HtmlEncode(createdCable.Description);
-                    string lengthText = GetCableLengthForPopup(createdCable);
-                    string popup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
-                        $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(createdCable.Name)}<br>" +
-                        $"<strong>Description:</strong> {descriptionText}<br>" +
-                        $"<strong>Color:</strong> {createdCable.Color}<br>" +
-                        $"<strong>Length:</strong> {lengthText}<br>" +
-                        $"<a href='cable/{createdCable.Id}' style='margin-top: 8px; display: inline-block;'>View Details</a>" +
-                        $"</div>";
-                    var polylineRef = await module.InvokeAsync<IJSObjectReference>("addPolyline", mapInstance, latLngs, createdCable.Color, popup, createdCable.Id, dotNetReference);
-                    mapLayers[$"cable_{createdCable.Id}"] = polylineRef;
-                }
+                // Draw the saved cable with editable vertices
+                await DrawCableWithVertices(createdCable);
 
                 // Refresh the cables list
                 await LoadCables();
@@ -720,13 +695,94 @@ else
     /// </summary>
     private async Task CancelCable()
     {
-        if (module != null && mapInstance != null && tempCablePolyline != null)
+        if (module != null && mapInstance != null)
         {
-            await module.InvokeVoidAsync("removeLayer", mapInstance, tempCablePolyline);
-            tempCablePolyline = null;
+            if (tempCablePolyline != null)
+            {
+                await module.InvokeVoidAsync("removeLayer", mapInstance, tempCablePolyline);
+                tempCablePolyline = null;
+            }
+            
+            // Remove all temporary markers
+            foreach (var marker in tempCableMarkers)
+            {
+                await module.InvokeVoidAsync("removeLayer", mapInstance, marker);
+            }
+            tempCableMarkers.Clear();
         }
         cablePoints.Clear();
         currentMode = MapMode.View;
+    }
+
+    /// <summary>
+    /// Draws a cable on the map with editable vertex markers (white circles).
+    /// Each vertex can be dragged to adjust the cable shape.
+    /// </summary>
+    /// <param name="cable">The cable to draw</param>
+    private async Task DrawCableWithVertices(Cable cable)
+    {
+        if (module == null || mapInstance == null || cable.Path == null || dotNetReference == null)
+            return;
+
+        // Remove existing cable and vertex markers if they exist (for redrawing after updates)
+        if (mapLayers.ContainsKey($"cable_{cable.Id}"))
+        {
+            await module.InvokeVoidAsync("removeLayer", mapInstance, mapLayers[$"cable_{cable.Id}"]);
+            mapLayers.Remove($"cable_{cable.Id}");
+        }
+        
+        if (cableVertexMarkers.ContainsKey(cable.Id))
+        {
+            foreach (var vertexMarker in cableVertexMarkers[cable.Id])
+            {
+                await module.InvokeVoidAsync("removeLayer", mapInstance, vertexMarker);
+            }
+            cableVertexMarkers.Remove(cable.Id);
+        }
+
+        // Convert coordinates to Leaflet format
+        var latLngs = new List<object>();
+        foreach (var coord in cable.Path.Coordinates)
+        {
+            latLngs.Add(new { lat = coord.Y, lng = coord.X });
+        }
+
+        // Build popup content
+        string descriptionText = string.IsNullOrWhiteSpace(cable.Description) 
+            ? "No description provided." 
+            : System.Net.WebUtility.HtmlEncode(cable.Description);
+        string lengthText = GetCableLengthForPopup(cable);
+        string popup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
+            $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(cable.Name)}<br>" +
+            $"<strong>Description:</strong> {descriptionText}<br>" +
+            $"<strong>Color:</strong> {cable.Color}<br>" +
+            $"<strong>Length:</strong> {lengthText}<br>" +
+            $"<a href='cable/{cable.Id}' style='margin-top: 8px; display: inline-block;'>View Details</a>" +
+            $"</div>";
+
+        // Draw the polyline with drag support
+        var polylineRef = await module.InvokeAsync<IJSObjectReference>("addEditablePolyline", 
+            mapInstance, latLngs, cable.Color, popup, cable.Id, dotNetReference);
+        mapLayers[$"cable_{cable.Id}"] = polylineRef;
+
+        // Store vertex markers for this cable
+        var vertexMarkers = new List<IJSObjectReference>();
+        int vertexIndex = 0;
+        foreach (var coord in cable.Path.Coordinates)
+        {
+            var vertexMarker = await module.InvokeAsync<IJSObjectReference>("addCableVertexMarker", 
+                mapInstance, coord.Y, coord.X);
+            
+            // Make the vertex marker draggable and connect it to the cable
+            // This returns a draggable marker (replaces the circle marker)
+            var draggableMarker = await module.InvokeAsync<IJSObjectReference>("makeVertexDraggable", 
+                mapInstance, vertexMarker, cable.Id, vertexIndex, polylineRef, dotNetReference);
+            
+            vertexMarkers.Add(draggableMarker);
+            vertexIndex++;
+        }
+        
+        cableVertexMarkers[cable.Id] = vertexMarkers;
     }
 
     /// <summary>
@@ -826,7 +882,7 @@ else
     }
 
     /// <summary>
-    /// Deletes a cable from the database and removes it from the map.
+    /// Deletes a cable from the database and removes it from the map, including all vertex markers.
     /// </summary>
     /// <param name="cableId">The unique ID of the cable to delete</param>
     private async Task DeleteCable(int cableId)
@@ -838,12 +894,22 @@ else
 
         if (response.IsSuccessStatusCode)
         {
-            // Remove from map
+            // Remove polyline from map
             var layerKey = $"cable_{cableId}";
             if (mapLayers.ContainsKey(layerKey))
             {
                 await module.InvokeVoidAsync("removeLayer", mapInstance, mapLayers[layerKey]);
                 mapLayers.Remove(layerKey);
+            }
+            
+            // Remove all vertex markers for this cable
+            if (cableVertexMarkers.ContainsKey(cableId))
+            {
+                foreach (var vertexMarker in cableVertexMarkers[cableId])
+                {
+                    await module.InvokeVoidAsync("removeLayer", mapInstance, vertexMarker);
+                }
+                cableVertexMarkers.Remove(cableId);
             }
 
             // Refresh the cables list
@@ -1284,6 +1350,106 @@ else
         {
             searchError = $"Failed to navigate to location: {ex.Message}";
             Console.WriteLine($"Navigation error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Handles when a cable vertex is dragged to a new location.
+    /// Updates the cable's path in the database and refreshes the display.
+    /// </summary>
+    /// <param name="cableId">The ID of the cable being modified</param>
+    /// <param name="vertexIndex">The index of the vertex that was moved</param>
+    /// <param name="newLat">The new latitude of the vertex</param>
+    /// <param name="newLng">The new longitude of the vertex</param>
+    [JSInvokable]
+    public async Task OnCableVertexDragEnd(int cableId, int vertexIndex, double newLat, double newLng)
+    {
+        try
+        {
+            // Get the current cable
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            options.Converters.Add(new GeoJsonConverterFactory());
+            
+            var cable = await Http.GetFromJsonAsync<Cable>($"api/cables/{cableId}", options);
+            if (cable == null || cable.Path == null) return;
+
+            // Update the coordinate at the specified index
+            var coordinates = cable.Path.Coordinates.ToList();
+            if (vertexIndex >= 0 && vertexIndex < coordinates.Count)
+            {
+                coordinates[vertexIndex] = new Coordinate(newLng, newLat);
+                
+                // Create new LineString with updated coordinates
+                var factory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
+                var newPath = factory.CreateLineString(coordinates.ToArray());
+                
+                // Update the cable
+                cable.Path = newPath;
+                
+                // Send PUT request to update the cable path
+                var response = await Http.PutAsJsonAsync($"api/cables/{cableId}", cable, options);
+                
+                if (response.IsSuccessStatusCode)
+                {
+                    // Reload the specific cable and redraw it with updated vertices
+                    var updatedCable = await Http.GetFromJsonAsync<Cable>($"api/cables/{cableId}", options);
+                    if (updatedCable != null)
+                    {
+                        await DrawCableWithVertices(updatedCable);
+                        StateHasChanged();
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating cable vertex: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Handles when an entire cable is dragged to a new location.
+    /// Moves all vertices by the same offset.
+    /// </summary>
+    /// <param name="cableId">The ID of the cable being moved</param>
+    /// <param name="deltaLat">The change in latitude</param>
+    /// <param name="deltaLng">The change in longitude</param>
+    [JSInvokable]
+    public async Task OnCableDragEnd(int cableId, double deltaLat, double deltaLng)
+    {
+        try
+        {
+            // Get the current cable
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            options.Converters.Add(new GeoJsonConverterFactory());
+            
+            var cable = await Http.GetFromJsonAsync<Cable>($"api/cables/{cableId}", options);
+            if (cable == null || cable.Path == null) return;
+
+            // Update all coordinates by the delta
+            var coordinates = cable.Path.Coordinates.Select(c => 
+                new Coordinate(c.X + deltaLng, c.Y + deltaLat)).ToArray();
+            
+            // Create new LineString with updated coordinates
+            var factory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
+            var newPath = factory.CreateLineString(coordinates);
+            
+            // Update the cable
+            cable.Path = newPath;
+            
+            // Send PUT request to update the cable path
+            var response = await Http.PutAsJsonAsync($"api/cables/{cableId}", cable, options);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                // Reload the cable and redraw it
+                await LoadCables();
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error moving cable: {ex.Message}");
         }
     }
 

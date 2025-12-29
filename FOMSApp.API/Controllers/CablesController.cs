@@ -107,18 +107,18 @@ namespace FOMSApp.API.Controllers
         }
 
         /// <summary>
-        /// Updates an existing cable route's properties (Name, Description, Color).
-        /// The Path (LineString) cannot be modified through this endpoint - it's set when the cable is created.
+        /// Updates an existing cable route's properties (Name, Description, Color, and Path).
+        /// The Path (LineString) can be updated to allow editing of cable vertices and moving the entire cable.
         /// </summary>
         /// <param name="id">The unique ID of the cable to update (from the URL route)</param>
-        /// <param name="cable">The cable object containing updated properties (Name, Description, Color)</param>
+        /// <param name="cable">The cable object containing updated properties (Name, Description, Color, Path)</param>
         /// <returns>
         /// HTTP 204 No Content if successfully updated, HTTP 400 Bad Request if the ID in the URL doesn't match the cable object,
         /// or HTTP 404 Not Found if the cable doesn't exist.
         /// </returns>
         /// <remarks>
-        /// This endpoint only updates Name, Description, and Color properties.
-        /// The Path property is preserved from the existing cable to prevent accidental modification of the cable route geometry.
+        /// This endpoint updates Name, Description, Color, and Path properties.
+        /// The Path can be modified to allow users to drag individual vertices or move the entire cable.
         /// </remarks>
         // PUT: api/cables/5
         [HttpPut("{id}")]
@@ -135,11 +135,11 @@ namespace FOMSApp.API.Controllers
             if (existingCable == null)
                 return NotFound();
 
-            // Update only the editable properties (Name, Description, Color)
-            // Preserve the Path (LineString) - it cannot be changed after creation
+            // Update all editable properties (Name, Description, Color, and Path)
             existingCable.Name = cable.Name;
             existingCable.Description = cable.Description;
             existingCable.Color = cable.Color;
+            existingCable.Path = cable.Path; // Allow Path updates for vertex editing and cable movement
 
             // Mark the entity as modified and save changes
             _context.Entry(existingCable).State = EntityState.Modified;
