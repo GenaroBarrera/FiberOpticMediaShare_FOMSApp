@@ -306,6 +306,40 @@ else
     }
 
     /// <summary>
+    /// Handles marker drag end events when a user moves a vault or midpoint marker to a new location.
+    /// This method is called from JavaScript when a marker is dragged and released.
+    /// </summary>
+    /// <param name="entityType">The type of entity moved: "vault" or "midpoint"</param>
+    /// <param name="entityId">The unique ID of the entity that was moved</param>
+    /// <param name="newLat">The new latitude coordinate after the drag</param>
+    /// <param name="newLng">The new longitude coordinate after the drag</param>
+    [JSInvokable]
+    public async Task OnMarkerDragEnd(string entityType, int entityId, double newLat, double newLng)
+    {
+        // Log for debugging
+        Console.WriteLine($"OnMarkerDragEnd called: type={entityType}, id={entityId}, newLat={newLat}, newLng={newLng}");
+
+        try
+        {
+            // Update location based on entity type
+            switch (entityType.ToLower())
+            {
+                case "vault":
+                    await UpdateVaultLocation(entityId, newLat, newLng);
+                    break;
+                case "midpoint":
+                    await UpdateMidpointLocation(entityId, newLat, newLng);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"ERROR updating {entityType} location: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Failed to update {entityType} location. Error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// Handles map click events from JavaScript. This method is called via JSInterop when the user clicks on the map.
     /// </summary>
     /// <param name="lat">Latitude of the click location.</param>
@@ -813,6 +847,164 @@ else
             MidpointStatus.Issue => "LightCoral",
             _ => "Black" // Default to black
         };
+    }
+
+    /// <summary>
+    /// Updates a vault's location after it has been dragged to a new position on the map.
+    /// </summary>
+    /// <param name="vaultId">The unique ID of the vault to update</param>
+    /// <param name="newLat">The new latitude coordinate</param>
+    /// <param name="newLng">The new longitude coordinate</param>
+    private async Task UpdateVaultLocation(int vaultId, double newLat, double newLng)
+    {
+        if (module == null || mapInstance == null) return;
+
+        try
+        {
+            // First, get the current vault to preserve other properties
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            options.Converters.Add(new GeoJsonConverterFactory());
+            
+            var vault = await Http.GetFromJsonAsync<Vault>($"api/vaults/{vaultId}", options);
+            if (vault == null)
+            {
+                await JS.InvokeVoidAsync("alert", "Vault not found.");
+                return;
+            }
+
+            // Create a new Point with the new coordinates (X=Longitude, Y=Latitude)
+            var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
+            var newLocation = geometryFactory.CreatePoint(new Coordinate(newLng, newLat));
+
+            // Update the vault with the new location
+            var updatedVault = new Vault
+            {
+                Id = vault.Id,
+                Name = vault.Name,
+                Status = vault.Status,
+                Description = vault.Description,
+                Color = vault.Color,
+                Location = newLocation // Update the location
+            };
+
+            // Send PUT request to update the vault location
+            var response = await Http.PutAsJsonAsync($"api/vaults/{vaultId}", updatedVault, options);
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Update the popup with new coordinates
+                string descriptionText = string.IsNullOrWhiteSpace(updatedVault.Description) 
+                    ? "No description provided." 
+                    : System.Net.WebUtility.HtmlEncode(updatedVault.Description);
+                string coordinates = $"{newLat:F6}, {newLng:F6}";
+                string newPopup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
+                    $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(updatedVault.Name)}<br>" +
+                    $"<strong>Status:</strong> {updatedVault.Status}<br>" +
+                    $"<strong>Description:</strong> {descriptionText}<br>" +
+                    $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
+                    $"<a href='vault/{updatedVault.Id}' style='margin-top: 8px; display: inline-block;'>View Details</a>" +
+                    $"</div>";
+                
+                // Update the marker's popup content
+                var layerKey = $"vault_{vaultId}";
+                if (mapLayers.ContainsKey(layerKey))
+                {
+                    await module.InvokeVoidAsync("updateMarkerPopup", mapLayers[layerKey], newPopup);
+                }
+
+                // Refresh the vaults list to get updated data
+                await LoadVaults();
+            }
+            else
+            {
+                var errorMessage = await response.Content.ReadAsStringAsync();
+                await JS.InvokeVoidAsync("alert", $"Failed to update vault location: {errorMessage}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating vault location: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Error updating vault location: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Updates a midpoint's location after it has been dragged to a new position on the map.
+    /// </summary>
+    /// <param name="midpointId">The unique ID of the midpoint to update</param>
+    /// <param name="newLat">The new latitude coordinate</param>
+    /// <param name="newLng">The new longitude coordinate</param>
+    private async Task UpdateMidpointLocation(int midpointId, double newLat, double newLng)
+    {
+        if (module == null || mapInstance == null) return;
+
+        try
+        {
+            // First, get the current midpoint to preserve other properties
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            options.Converters.Add(new GeoJsonConverterFactory());
+            
+            var midpoint = await Http.GetFromJsonAsync<Midpoint>($"api/midpoints/{midpointId}", options);
+            if (midpoint == null)
+            {
+                await JS.InvokeVoidAsync("alert", "Midpoint not found.");
+                return;
+            }
+
+            // Create a new Point with the new coordinates (X=Longitude, Y=Latitude)
+            var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
+            var newLocation = geometryFactory.CreatePoint(new Coordinate(newLng, newLat));
+
+            // Update the midpoint with the new location
+            var updatedMidpoint = new Midpoint
+            {
+                Id = midpoint.Id,
+                Name = midpoint.Name,
+                Status = midpoint.Status,
+                Description = midpoint.Description,
+                Color = midpoint.Color,
+                Location = newLocation // Update the location
+            };
+
+            // Send PUT request to update the midpoint location
+            var response = await Http.PutAsJsonAsync($"api/midpoints/{midpointId}", updatedMidpoint, options);
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Update the popup with new coordinates
+                string descriptionText = string.IsNullOrWhiteSpace(updatedMidpoint.Description) 
+                    ? "No description provided." 
+                    : System.Net.WebUtility.HtmlEncode(updatedMidpoint.Description);
+                string coordinates = $"{newLat:F6}, {newLng:F6}";
+                string newPopup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
+                    $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(updatedMidpoint.Name)}<br>" +
+                    $"<strong>Status:</strong> {updatedMidpoint.Status}<br>" +
+                    $"<strong>Description:</strong> {descriptionText}<br>" +
+                    $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
+                    $"<a href='midpoint/{updatedMidpoint.Id}' style='margin-top: 8px; display: inline-block;'>View Details</a>" +
+                    $"</div>";
+                
+                // Update the marker's popup content
+                var layerKey = $"midpoint_{midpointId}";
+                if (mapLayers.ContainsKey(layerKey))
+                {
+                    await module.InvokeVoidAsync("updateMarkerPopup", mapLayers[layerKey], newPopup);
+                }
+
+                // Refresh the midpoints list to get updated data
+                await LoadMidpoints();
+            }
+            else
+            {
+                var errorMessage = await response.Content.ReadAsStringAsync();
+                await JS.InvokeVoidAsync("alert", $"Failed to update midpoint location: {errorMessage}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating midpoint location: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Error updating midpoint location: {ex.Message}");
+        }
     }
 
     /// <summary>

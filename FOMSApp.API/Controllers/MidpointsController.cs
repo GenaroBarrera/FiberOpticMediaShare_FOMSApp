@@ -157,15 +157,14 @@ namespace FOMSApp.API.Controllers
                 return NotFound();
             }
 
-            // Update only the editable properties (preserve Location and other system properties)
+            // Update the editable properties (including Location for drag-and-drop support)
             existingMidpoint.Name = midpoint.Name;
             existingMidpoint.Status = midpoint.Status;
             existingMidpoint.Description = midpoint.Description;
+            existingMidpoint.Location = midpoint.Location; // Allow location updates for drag-and-drop
             
             // Update Color property to match the new Status
             existingMidpoint.Color = GetStatusColor(midpoint.Status);
-            
-            // Note: Location is NOT updated - midpoints cannot be moved after creation
 
             // Mark the entity as modified so Entity Framework knows to update it
             _context.Entry(existingMidpoint).State = EntityState.Modified;

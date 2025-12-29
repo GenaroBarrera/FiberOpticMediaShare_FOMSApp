@@ -61,10 +61,11 @@ export function addMarker(map, lat, lng, popupText, entityId, dotNetReference, c
     // Create a custom colored icon if color is provided, otherwise use default blue
     var icon = color ? createColoredIcon(color) : undefined;
     
-    var marker = L.marker([lat, lng], { icon: icon }).addTo(map);
+    // Make the marker draggable so users can move it to a new location
+    var marker = L.marker([lat, lng], { icon: icon, draggable: true }).addTo(map);
     marker.bindPopup(popupText); // Add a popup to the marker
     
-    // If entityId and dotNetReference are provided, add click handler for deletion
+    // If entityId and dotNetReference are provided, add click handler for deletion and drag handler for moving
     if (entityId && dotNetReference) {
         // Override the default click behavior to handle delete mode
         marker.off('click'); // Remove default click handler (which opens popup)
@@ -79,6 +80,14 @@ export function addMarker(map, lat, lng, popupText, entityId, dotNetReference, c
                 // If not in delete mode, open the popup manually
                 marker.openPopup();
             }
+        });
+        
+        // Handle drag end event to update the location in the database
+        marker.on('dragend', function(e) {
+            var newLat = marker.getLatLng().lat;
+            var newLng = marker.getLatLng().lng;
+            // Call C# method to update the location
+            dotNetReference.invokeMethodAsync('OnMarkerDragEnd', 'vault', entityId, newLat, newLng);
         });
     }
     
@@ -128,14 +137,19 @@ export function addCircle(map, lat, lng, color, popupText, entityId, dotNetRefer
     var circleMarker;
     if (icon) {
         // Use marker with custom icon for better visual distinction
-        circleMarker = L.marker([lat, lng], { icon: icon }).addTo(map);
+        // Make the marker draggable so users can move it to a new location
+        circleMarker = L.marker([lat, lng], { icon: icon, draggable: true }).addTo(map);
     } else {
         // Fallback to circle marker if no color specified
-        circleMarker = L.circleMarker([lat, lng], {
-            color: 'black',       // Border color
-            fillColor: color || 'green',     // Inside color
-            fillOpacity: 0.8,
-            radius: 6             // Size of the dot
+        // Note: circleMarker doesn't support draggable directly, so we'll use a marker instead
+        circleMarker = L.marker([lat, lng], { 
+            draggable: true,
+            icon: L.divIcon({
+                className: 'custom-circle-marker',
+                html: '<div style="width: 12px; height: 12px; border-radius: 50%; background-color: ' + (color || 'green') + '; border: 2px solid black;"></div>',
+                iconSize: [12, 12],
+                iconAnchor: [6, 6]
+            })
         }).addTo(map);
     }
 
@@ -143,7 +157,7 @@ export function addCircle(map, lat, lng, color, popupText, entityId, dotNetRefer
         circleMarker.bindPopup(popupText);
     }
     
-    // If entityId and dotNetReference are provided, add click handler for deletion
+    // If entityId and dotNetReference are provided, add click handler for deletion and drag handler for moving
     if (entityId && dotNetReference) {
         // Override the default click behavior to handle delete mode
         circleMarker.off('click'); // Remove default click handler (which opens popup)
@@ -158,6 +172,14 @@ export function addCircle(map, lat, lng, color, popupText, entityId, dotNetRefer
                 // If not in delete mode, open the popup manually
                 circleMarker.openPopup();
             }
+        });
+        
+        // Handle drag end event to update the location in the database
+        circleMarker.on('dragend', function(e) {
+            var newLat = circleMarker.getLatLng().lat;
+            var newLng = circleMarker.getLatLng().lng;
+            // Call C# method to update the location
+            dotNetReference.invokeMethodAsync('OnMarkerDragEnd', 'midpoint', entityId, newLat, newLng);
         });
     }
     
@@ -201,4 +223,10 @@ export function addClickEventListener(map, dotNetReference) {
 // Function to remove a layer (marker, polyline, circle, etc.) from the map
 export function removeLayer(map, layer) {
     map.removeLayer(layer);
+}
+
+// Function to update a marker's popup content
+// Used after moving a marker to update the coordinates displayed in the popup
+export function updateMarkerPopup(marker, newPopupText) {
+    marker.setPopupContent(newPopupText);
 }

@@ -145,13 +145,12 @@ namespace FOMSApp.API.Controllers
         }
 
         /// <summary>
-        /// Updates an existing vault's properties (name, status, description).
-        /// Does not update the Location property - vaults cannot be moved after creation.
+        /// Updates an existing vault's properties (name, status, description, location).
+        /// The Location property can be updated to allow moving vaults on the map.
         /// </summary>
         /// <param name="id">The unique ID of the vault to update (from the URL route)</param>
         /// <param name="vault">
-        /// The updated vault data. Only Name, Status, and Description properties are updated.
-        /// The Location property is ignored to prevent accidental movement of vaults.
+        /// The updated vault data. Name, Status, Description, and Location properties can be updated.
         /// </param>
         /// <returns>
         /// HTTP 204 No Content if successfully updated, HTTP 400 Bad Request if the ID doesn't match,
@@ -161,11 +160,10 @@ namespace FOMSApp.API.Controllers
         /// RESTful Best Practice: PUT operations typically return 204 No Content (success with no body)
         /// when the update is successful, as the client already knows what was sent.
         /// 
-        /// This method uses a partial update pattern - only the provided properties are updated.
-        /// The Location property is explicitly preserved to prevent vaults from being moved.
+        /// This method allows updating the Location property to support dragging vaults to new positions on the map.
         /// 
         /// Entity Framework's Update() method marks all properties as modified, so we manually
-        /// set only the properties we want to allow editing.
+        /// set the properties we want to allow editing.
         /// </remarks>
         // PUT: api/vaults/5
         [HttpPut("{id}")]
@@ -184,15 +182,14 @@ namespace FOMSApp.API.Controllers
                 return NotFound();
             }
 
-            // Update only the editable properties (preserve Location and other system properties)
+            // Update the editable properties (including Location for drag-and-drop support)
             existingVault.Name = vault.Name;
             existingVault.Status = vault.Status;
             existingVault.Description = vault.Description;
+            existingVault.Location = vault.Location; // Allow location updates for drag-and-drop
             
             // Update Color property to match the new Status
             existingVault.Color = GetStatusColor(vault.Status);
-            
-            // Note: Location is NOT updated - vaults cannot be moved after creation
 
             // Mark the entity as modified so Entity Framework knows to update it
             _context.Entry(existingVault).State = EntityState.Modified;
