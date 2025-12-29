@@ -19,6 +19,38 @@
 }
 else
 {
+    <!-- Search Bar -->
+    <div class="mb-3">
+        <div class="input-group">
+            <input type="text" 
+                   class="form-control" 
+                   placeholder="Search by address or coordinates (e.g., '123 Main St, San Antonio, TX' or '29.54248, -98.73548')" 
+                   @bind="searchQuery"
+                   @bind:event="oninput"
+                   @onkeydown="HandleSearchKeyPress" />
+            <button type="button" 
+                    class="btn btn-primary" 
+                    @onclick="SearchLocation"
+                    disabled="@isSearching">
+                @if (isSearching)
+                {
+                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    <text>Searching...</text>
+                }
+                else
+                {
+                    <text>Search</text>
+                }
+            </button>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(searchError))
+        {
+            <div class="alert alert-danger mt-2 mb-0" role="alert">
+                @searchError
+            </div>
+        }
+    </div>
+
     <!-- Toolbar for map editing modes -->
     <div class="btn-toolbar mb-3" role="toolbar">
         <div class="btn-group me-2" role="group">
@@ -97,6 +129,22 @@ else
     /// Current interaction mode for the map editor.
     /// </summary>
     private MapMode currentMode = MapMode.View;
+
+    /// <summary>
+    /// Search query entered by the user (address or coordinates).
+    /// </summary>
+    private string searchQuery = string.Empty;
+
+    /// <summary>
+    /// Error message to display if search fails.
+    /// </summary>
+    private string? searchError;
+
+    /// <summary>
+    /// Indicates whether a search operation is currently in progress.
+    /// Used to disable the search button and show a loading spinner during search.
+    /// </summary>
+    private bool isSearching = false;
     
     /// <summary>
     /// Temporary storage for points collected while drawing a cable.
@@ -1062,6 +1110,180 @@ else
             // Display in miles for longer cables
             double miles = totalLengthFeet / 5280.0;
             return $"{miles:F2} mi";
+        }
+    }
+
+    /// <summary>
+    /// Handles the Enter key press in the search input field.
+    /// Triggers the search when the user presses Enter.
+    /// </summary>
+    /// <param name="e">Keyboard event arguments</param>
+    private async Task HandleSearchKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !isSearching && !string.IsNullOrWhiteSpace(searchQuery))
+        {
+            await SearchLocation();
+        }
+    }
+
+    /// <summary>
+    /// Searches for a location by address or coordinates and navigates the map to that location.
+    /// Supports two input formats:
+    /// 1. Street addresses (e.g., "123 Main St, San Antonio, TX") - uses Nominatim geocoding
+    /// 2. Coordinates (e.g., "29.54248, -98.73548" or "29.54248,-98.73548") - parses directly
+    /// </summary>
+    private async Task SearchLocation()
+    {
+        if (string.IsNullOrWhiteSpace(searchQuery))
+        {
+            searchError = "Please enter an address or coordinates to search.";
+            return;
+        }
+
+        isSearching = true;
+        searchError = null;
+        StateHasChanged();
+
+        try
+        {
+            // Try to parse as coordinates first (format: "lat, lng" or "lat,lng")
+            if (TryParseCoordinates(searchQuery, out double lat, out double lng))
+            {
+                // Valid coordinates - navigate directly
+                await NavigateToLocation(lat, lng);
+            }
+            else
+            {
+                // Not coordinates - treat as address and geocode
+                await GeocodeAddress(searchQuery);
+            }
+        }
+        catch (Exception ex)
+        {
+            searchError = $"Search failed: {ex.Message}";
+            Console.WriteLine($"Search error: {ex.Message}");
+        }
+        finally
+        {
+            isSearching = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Attempts to parse the search query as coordinates (latitude, longitude).
+    /// Supports formats like "29.54248, -98.73548" or "29.54248,-98.73548".
+    /// </summary>
+    /// <param name="query">The search query to parse</param>
+    /// <param name="lat">Output parameter for the parsed latitude</param>
+    /// <param name="lng">Output parameter for the parsed longitude</param>
+    /// <returns>True if the query was successfully parsed as coordinates, false otherwise</returns>
+    private bool TryParseCoordinates(string query, out double lat, out double lng)
+    {
+        lat = 0;
+        lng = 0;
+
+        // Remove whitespace and split by comma
+        var parts = query.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        
+        if (parts.Length == 2)
+        {
+            // Try to parse both parts as doubles
+            if (double.TryParse(parts[0], out lat) && double.TryParse(parts[1], out lng))
+            {
+                // Validate coordinate ranges (latitude: -90 to 90, longitude: -180 to 180)
+                if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Geocodes an address using the Nominatim API (OpenStreetMap's geocoding service).
+    /// This converts a street address into latitude/longitude coordinates.
+    /// </summary>
+    /// <param name="address">The address to geocode (e.g., "123 Main St, San Antonio, TX")</param>
+    private async Task GeocodeAddress(string address)
+    {
+        try
+        {
+            // Use Nominatim (OpenStreetMap's geocoding service) - free, no API key required
+            // Note: Nominatim has usage policies - be respectful with request frequency
+            var encodedAddress = System.Net.WebUtility.UrlEncode(address);
+            var nominatimUrl = $"https://nominatim.openstreetmap.org/search?q={encodedAddress}&format=json&limit=1";
+
+            // Create HTTP request with proper headers (Nominatim requires a User-Agent)
+            var request = new HttpRequestMessage(HttpMethod.Get, nominatimUrl);
+            request.Headers.Add("User-Agent", "FOMSApp/1.0"); // Required by Nominatim usage policy
+
+            var response = await Http.SendAsync(request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var jsonContent = await response.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                
+                // Nominatim returns an array of results
+                var results = JsonSerializer.Deserialize<JsonElement[]>(jsonContent, options);
+
+                if (results != null && results.Length > 0)
+                {
+                    var firstResult = results[0];
+                    
+                    // Extract latitude and longitude from the result
+                    if (firstResult.TryGetProperty("lat", out var latElement) &&
+                        firstResult.TryGetProperty("lon", out var lngElement))
+                    {
+                        if (double.TryParse(latElement.GetString(), out double lat) &&
+                            double.TryParse(lngElement.GetString(), out double lng))
+                        {
+                            await NavigateToLocation(lat, lng);
+                            return;
+                        }
+                    }
+                }
+
+                searchError = "Address not found. Please try a more specific address or use coordinates.";
+            }
+            else
+            {
+                searchError = $"Geocoding service error: {response.StatusCode}";
+            }
+        }
+        catch (Exception ex)
+        {
+            searchError = $"Failed to geocode address: {ex.Message}";
+            Console.WriteLine($"Geocoding error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Navigates the map to the specified location by panning and zooming.
+    /// </summary>
+    /// <param name="lat">The target latitude</param>
+    /// <param name="lng">The target longitude</param>
+    private async Task NavigateToLocation(double lat, double lng)
+    {
+        if (module == null || mapInstance == null)
+        {
+            searchError = "Map not initialized. Please wait for the map to load.";
+            return;
+        }
+
+        try
+        {
+            // Call JavaScript function to pan and zoom the map to the location
+            await module.InvokeVoidAsync("navigateToLocation", mapInstance, lat, lng);
+            searchError = null; // Clear any previous errors
+        }
+        catch (Exception ex)
+        {
+            searchError = $"Failed to navigate to location: {ex.Message}";
+            Console.WriteLine($"Navigation error: {ex.Message}");
         }
     }
 

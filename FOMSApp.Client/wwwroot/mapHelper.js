@@ -230,3 +230,14 @@ export function removeLayer(map, layer) {
 export function updateMarkerPopup(marker, newPopupText) {
     marker.setPopupContent(newPopupText);
 }
+
+// Function to navigate the map to a specific location
+// Pans and zooms the map to center on the given coordinates
+export function navigateToLocation(map, lat, lng) {
+    // Use flyTo for smooth animation, or setView for instant navigation
+    // flyTo provides a smooth animated transition to the new location
+    map.flyTo([lat, lng], 18, {
+        animate: true,
+        duration: 1.0 // Animation duration in seconds
+    });
+}
