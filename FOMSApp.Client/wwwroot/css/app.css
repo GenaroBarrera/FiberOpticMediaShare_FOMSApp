@@ -151,3 +151,32 @@ code {
     background: transparent;
     border: none;
 }
+
+/* Cursor styles for map editing modes */
+.map-container.cursor-crosshair {
+    cursor: crosshair !important;
+}
+
+.map-container.cursor-pointer {
+    cursor: pointer !important;
+}
+
+.map-container.cursor-default {
+    cursor: default !important;
+}
+
+/* Ensure cursor applies to map canvas and all map elements */
+.map-container.cursor-crosshair .leaflet-container,
+.map-container.cursor-crosshair .leaflet-container * {
+    cursor: crosshair !important;
+}
+
+.map-container.cursor-pointer .leaflet-container,
+.map-container.cursor-pointer .leaflet-container * {
+    cursor: pointer !important;
+}
+
+.map-container.cursor-default .leaflet-container,
+.map-container.cursor-default .leaflet-container * {
+    cursor: default !important;
+}

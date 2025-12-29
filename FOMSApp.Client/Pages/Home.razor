@@ -101,7 +101,7 @@ else
         </div>
     }
 
-    <div id="map" class="map-container"></div>
+    <div id="map" class="map-container @GetMapCursorClass()"></div>
 }
 
 @implements IDisposable
@@ -449,6 +449,24 @@ else
             MapMode.DrawCable => "Click multiple points on the map to define the cable path. Click 'Finish Cable' when done.",
             MapMode.Delete => "Click on a vault, midpoint, or cable to delete it.",
             _ => ""
+        };
+    }
+
+    /// <summary>
+    /// Returns the CSS class name for the map cursor based on the current editing mode.
+    /// This provides visual feedback to users about what action they can perform.
+    /// </summary>
+    /// <returns>A CSS class name that sets the appropriate cursor style</returns>
+    private string GetMapCursorClass()
+    {
+        return currentMode switch
+        {
+            MapMode.View => "cursor-default",
+            MapMode.AddVault => "cursor-crosshair",
+            MapMode.AddMidpoint => "cursor-crosshair",
+            MapMode.DrawCable => "cursor-crosshair",
+            MapMode.Delete => "cursor-pointer",
+            _ => "cursor-default"
         };
     }
 
