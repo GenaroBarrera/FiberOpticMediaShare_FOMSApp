@@ -116,11 +116,11 @@ code {
 /* Map container styling to fill available vertical space */
 .map-container {
     width: 100%;
-    /* Calculate height: viewport height minus header, toolbar, alerts, and padding */
-    /* Account for: h1 (~50px), search bar (~60px), toolbar (~50px), potential alerts (~100px), padding (~30px) */
-    height: calc(100vh - 290px);
+    /* Calculate height: viewport height minus header, toolbar (now includes search bar on same line), alerts, and padding */
+    /* Account for: h1 (~50px), toolbar with search (~60px), potential alerts (~100px), padding (~30px) */
+    height: calc(100vh - 240px);
     min-height: 500px; /* Ensure minimum usable height */
-    max-height: calc(100vh - 290px); /* Prevent expansion beyond calculated height */
+    max-height: calc(100vh - 240px); /* Prevent expansion beyond calculated height */
     /* Consistent bottom offset matching the left padding (px-4 = 1.5rem) */
     margin-bottom: 1.5rem;
     /* Prevent the map from resizing when content above changes */
@@ -128,6 +128,13 @@ code {
     /* Ensure the container maintains its size */
     box-sizing: border-box;
     overflow: hidden; /* Prevent content overflow */
+}
+
+/* Search bar container styling */
+.search-bar-container {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
 }
 
 /* On larger screens, match the 2rem left padding for bottom offset */
@@ -139,8 +146,21 @@ code {
         /* Use negative margin to compensate and align with left */
         margin-right: -0.5rem; /* Makes effective right offset = 1.5rem + 0.5rem = 2rem to match left */
         /* Maintain consistent height calculation */
-        height: calc(100vh - 290px);
-        max-height: calc(100vh - 290px);
+        height: calc(100vh - 240px);
+        max-height: calc(100vh - 240px);
+    }
+}
+
+/* Responsive search bar width */
+@media (max-width: 768px) {
+    .search-bar-container .input-group {
+        width: 100% !important;
+        max-width: 300px;
+    }
+    
+    .search-bar-container .alert {
+        width: 100% !important;
+        max-width: 300px;
     }
 }
 

@@ -20,66 +20,69 @@
 }
 else
 {
-    <!-- Search Bar -->
-    <div class="mb-3">
-        <div class="input-group">
-            <input type="text" 
-                   class="form-control" 
-                   placeholder="Search by address or coordinates (e.g., '123 Main St, San Antonio, TX' or '29.54248, -98.73548')" 
-                   @bind="searchQuery"
-                   @bind:event="oninput"
-                   @onkeydown="HandleSearchKeyPress" />
-            <button type="button" 
-                    class="btn btn-primary" 
-                    @onclick="SearchLocation"
-                    disabled="@isSearching">
-                @if (isSearching)
-                {
-                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                    <text>Searching...</text>
-                }
-                else
-                {
-                    <text>Search</text>
-                }
-            </button>
-        </div>
-        @if (!string.IsNullOrWhiteSpace(searchError))
-        {
-            <div class="alert alert-danger mt-2 mb-0" role="alert">
-                @searchError
+    <!-- Toolbar for map editing modes with search bar on the same line -->
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <!-- Toolbar buttons on the left -->
+        <div class="btn-toolbar" role="toolbar">
+            <div class="btn-group" role="group">
+                <button type="button" 
+                        class="btn @(currentMode == MapMode.View ? "btn-primary" : "btn-outline-primary")"
+                        @onclick="async () => await SetMode(MapMode.View)">
+                    View
+                </button>
+                <button type="button" 
+                        class="btn @(currentMode == MapMode.AddVault ? "btn-primary" : "btn-outline-primary")"
+                        @onclick="async () => await SetMode(MapMode.AddVault)">
+                    Add Vault
+                </button>
+                <button type="button" 
+                        class="btn @(currentMode == MapMode.AddMidpoint ? "btn-primary" : "btn-outline-primary")"
+                        @onclick="async () => await SetMode(MapMode.AddMidpoint)">
+                    Add Midpoint
+                </button>
+                <button type="button" 
+                        class="btn @(currentMode == MapMode.DrawCable ? "btn-primary" : "btn-outline-primary")"
+                        @onclick="async () => await SetMode(MapMode.DrawCable)">
+                    Draw Cable
+                </button>
+                <button type="button" 
+                        class="btn @(currentMode == MapMode.Delete ? "btn-primary" : "btn-outline-primary")"
+                        @onclick="async () => await SetMode(MapMode.Delete)">
+                    Delete
+                </button>
             </div>
-        }
-    </div>
+        </div>
 
-    <!-- Toolbar for map editing modes -->
-    <div class="btn-toolbar mb-3" role="toolbar">
-        <div class="btn-group me-2" role="group">
-            <button type="button" 
-                    class="btn @(currentMode == MapMode.View ? "btn-primary" : "btn-outline-primary")"
-                    @onclick="async () => await SetMode(MapMode.View)">
-                View
-            </button>
-            <button type="button" 
-                    class="btn @(currentMode == MapMode.AddVault ? "btn-primary" : "btn-outline-primary")"
-                    @onclick="async () => await SetMode(MapMode.AddVault)">
-                Add Vault
-            </button>
-            <button type="button" 
-                    class="btn @(currentMode == MapMode.AddMidpoint ? "btn-primary" : "btn-outline-primary")"
-                    @onclick="async () => await SetMode(MapMode.AddMidpoint)">
-                Add Midpoint
-            </button>
-            <button type="button" 
-                    class="btn @(currentMode == MapMode.DrawCable ? "btn-primary" : "btn-outline-primary")"
-                    @onclick="async () => await SetMode(MapMode.DrawCable)">
-                Draw Cable
-            </button>
-            <button type="button" 
-                    class="btn @(currentMode == MapMode.Delete ? "btn-primary" : "btn-outline-primary")"
-                    @onclick="async () => await SetMode(MapMode.Delete)">
-                Delete
-            </button>
+        <!-- Search Bar on the right -->
+        <div class="search-bar-container">
+            <div class="input-group" style="width: 400px;">
+                <input type="text" 
+                       class="form-control" 
+                       placeholder="Search address or coordinates..." 
+                       @bind="searchQuery"
+                       @bind:event="oninput"
+                       @onkeydown="HandleSearchKeyPress" />
+                <button type="button" 
+                        class="btn btn-primary" 
+                        @onclick="SearchLocation"
+                        disabled="@isSearching">
+                    @if (isSearching)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        <text>Searching...</text>
+                    }
+                    else
+                    {
+                        <text>Search</text>
+                    }
+                </button>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(searchError))
+            {
+                <div class="alert alert-danger mt-2 mb-0" role="alert" style="width: 400px;">
+                    @searchError
+                </div>
+            }
         </div>
     </div>
 
