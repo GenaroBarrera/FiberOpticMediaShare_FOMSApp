@@ -90,7 +90,7 @@ export function toggleMapView(map, useSatellite) {
 
 // Function to create a custom colored icon for vault markers
 // Returns a Leaflet DivIcon configured with the specified color
-// Vault markers are upside-down triangles (pointing down) with white outline, slightly larger than midpoint markers
+// Vault markers are triangles pointing down (point at bottom) with white outline, slightly larger than midpoint markers
 function createColoredIcon(color) {
     // Map color names to hex values for better browser compatibility
     var colorMap = {
@@ -104,21 +104,21 @@ function createColoredIcon(color) {
     // Get hex color or use the provided color if it's already a hex code
     var hexColor = colorMap[color] || color || '#0066CC';
     
-    // Create an SVG upside-down triangle marker with white outline
-    // Size: 26x26 (slightly larger than midpoint which is 20x20)
-    // Triangle points downward (upside-down)
-    var svgIcon = '<svg width="26" height="26" viewBox="0 0 26 26" xmlns="http://www.w3.org/2000/svg">' +
-        // Upside-down triangle (pointing down)
-        '<path d="M 13 2 L 2 24 L 24 24 Z" ' +
+    // Create an SVG triangle marker with white outline, pointing down (point at bottom)
+    // Size: 24x24 (slightly larger than midpoint which is 20x20, but smaller than previous 26x26)
+    // Triangle points downward with point at the bottom
+    var svgIcon = '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">' +
+        // Triangle pointing down (point at bottom, base at top)
+        '<path d="M 12 22 L 2 2 L 22 2 Z" ' +
         'fill="' + hexColor + '" stroke="white" stroke-width="2"/>' +
         '</svg>';
     
     return L.divIcon({
         html: svgIcon,
         className: 'custom-colored-marker', // Custom class for styling if needed (no default Leaflet styles)
-        iconSize: [26, 26],
-        iconAnchor: [13, 24], // Anchor point at the bottom center of the triangle (where the point would be)
-        popupAnchor: [0, -13] // Position popup above the marker
+        iconSize: [24, 24],
+        iconAnchor: [12, 22], // Anchor point at the bottom center of the triangle (the point)
+        popupAnchor: [0, -12] // Position popup above the marker
     });
 }
 
