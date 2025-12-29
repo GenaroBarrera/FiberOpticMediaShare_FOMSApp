@@ -194,6 +194,11 @@ else
     private Dictionary<int, List<IJSObjectReference>> cableVertexMarkers = new();
 
     /// <summary>
+    /// ID of the currently selected cable (if any). Vertex markers are shown for the selected cable.
+    /// </summary>
+    private int? selectedCableId = null;
+
+    /// <summary>
     /// Dictionary to store map layer references (markers, circles, polylines) with their entity IDs.
     /// Used to identify which item was clicked for deletion.
     /// Key: Entity ID (vault/midpoint/cable ID), Value: JavaScript object reference to the Leaflet layer
@@ -842,6 +847,47 @@ else
         }
         
         cableVertexMarkers[cable.Id] = vertexMarkers;
+        
+        // Hide vertex markers by default (only show when cable is selected or dragging)
+        // Only show if this cable is currently selected
+        if (selectedCableId == cable.Id)
+        {
+            await ShowCableVertices(cable.Id);
+        }
+        else
+        {
+            await HideCableVertices(cable.Id);
+        }
+    }
+
+    /// <summary>
+    /// Shows the vertex markers for a specific cable.
+    /// </summary>
+    /// <param name="cableId">The ID of the cable whose vertices should be shown</param>
+    private async Task ShowCableVertices(int cableId)
+    {
+        if (module == null || mapInstance == null || !cableVertexMarkers.ContainsKey(cableId))
+            return;
+
+        foreach (var vertexMarker in cableVertexMarkers[cableId])
+        {
+            await module.InvokeVoidAsync("showLayer", mapInstance, vertexMarker);
+        }
+    }
+
+    /// <summary>
+    /// Hides the vertex markers for a specific cable.
+    /// </summary>
+    /// <param name="cableId">The ID of the cable whose vertices should be hidden</param>
+    private async Task HideCableVertices(int cableId)
+    {
+        if (module == null || mapInstance == null || !cableVertexMarkers.ContainsKey(cableId))
+            return;
+
+        foreach (var vertexMarker in cableVertexMarkers[cableId])
+        {
+            await module.InvokeVoidAsync("hideLayer", mapInstance, vertexMarker);
+        }
     }
 
     /// <summary>
@@ -1483,7 +1529,10 @@ else
                     var updatedCable = await Http.GetFromJsonAsync<Cable>($"api/cables/{cableId}", options);
                     if (updatedCable != null)
                     {
+                        // Preserve selection state
+                        int? previousSelectedId = selectedCableId;
                         await DrawCableWithVertices(updatedCable);
+                        selectedCableId = previousSelectedId;
                         StateHasChanged();
                     }
                 }
@@ -1493,6 +1542,74 @@ else
         {
             Console.WriteLine($"Error updating cable vertex: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Handles when a cable vertex drag operation starts.
+    /// Ensures the cable is selected so vertices remain visible during dragging.
+    /// </summary>
+    /// <param name="cableId">The ID of the cable being edited</param>
+    [JSInvokable]
+    public async Task OnCableVertexDragStart(int cableId)
+    {
+        // Automatically select the cable when dragging starts so vertices stay visible
+        if (selectedCableId != cableId)
+        {
+            // Hide vertices for previously selected cable
+            if (selectedCableId.HasValue)
+            {
+                await HideCableVertices(selectedCableId.Value);
+            }
+            // Select the cable being edited
+            selectedCableId = cableId;
+            await ShowCableVertices(cableId);
+        }
+    }
+
+    /// <summary>
+    /// Handles when a cable vertex drag operation completes.
+    /// Hides vertices if the cable is not selected.
+    /// </summary>
+    /// <param name="cableId">The ID of the cable</param>
+    [JSInvokable]
+    public async Task OnCableVertexDragEndComplete(int cableId)
+    {
+        // Hide vertices if this cable is not currently selected
+        // Note: If cable was auto-selected during drag, it will remain selected and vertices will stay visible
+        if (selectedCableId != cableId)
+        {
+            await HideCableVertices(cableId);
+        }
+    }
+
+    /// <summary>
+    /// Handles when a cable is selected (clicked).
+    /// Shows vertex markers for the selected cable and hides them for previously selected cable.
+    /// </summary>
+    /// <param name="cableId">The ID of the cable that was selected</param>
+    [JSInvokable]
+    public async Task OnCableSelected(int cableId)
+    {
+        // Hide vertices for previously selected cable
+        if (selectedCableId.HasValue && selectedCableId.Value != cableId)
+        {
+            await HideCableVertices(selectedCableId.Value);
+        }
+
+        // Toggle selection: if clicking the same cable, deselect it
+        if (selectedCableId == cableId)
+        {
+            await HideCableVertices(cableId);
+            selectedCableId = null;
+        }
+        else
+        {
+            // Show vertices for newly selected cable
+            selectedCableId = cableId;
+            await ShowCableVertices(cableId);
+        }
+
+        StateHasChanged();
     }
 
     /// <summary>

@@ -292,6 +292,20 @@ export function removeLayer(map, layer) {
     map.removeLayer(layer);
 }
 
+// Function to show a layer (make it visible)
+export function showLayer(map, layer) {
+    if (layer && !map.hasLayer(layer)) {
+        layer.addTo(map);
+    }
+}
+
+// Function to hide a layer (make it invisible but keep it in memory)
+export function hideLayer(map, layer) {
+    if (layer && map.hasLayer(layer)) {
+        map.removeLayer(layer);
+    }
+}
+
 // Function to update a marker's popup content
 // Used after moving a marker to update the coordinates displayed in the popup
 export function updateMarkerPopup(marker, newPopupText) {
@@ -319,8 +333,10 @@ export function invalidateMapSize(map) {
 
 // Function to create a white circle marker for cable vertices
 // These markers are visible at each point of the cable (similar to Google My Maps)
+// Note: Marker is created but not added to map initially - will be shown when cable is selected or dragging
 export function addCableVertexMarker(map, lat, lng) {
     // Create a white circle marker with a border
+    // Don't add to map initially - will be shown/hidden based on selection state
     var marker = L.circleMarker([lat, lng], {
         radius: 6,
         fillColor: '#ffffff',
@@ -328,7 +344,8 @@ export function addCableVertexMarker(map, lat, lng) {
         weight: 2,
         opacity: 1,
         fillOpacity: 1
-    }).addTo(map);
+    });
+    // Note: Not calling .addTo(map) here - marker will be added when shown
     
     return marker;
 }
@@ -436,13 +453,16 @@ export function addEditablePolyline(map, coordinates, color, popupText, entityId
     // Store handler for cleanup
     polyline._mouseupHandler = mouseupHandler;
     
-    // If entityId and dotNetReference are provided, add click handler for deletion
+    // If entityId and dotNetReference are provided, add click handler for selection and deletion
     if (entityId && dotNetReference) {
         polyline.on('click', function(e) {
             if (isDeleteMode) {
                 L.DomEvent.stop(e);
                 // Call C# method to handle the click (for deletion mode)
                 dotNetReference.invokeMethodAsync('OnEntityClick', 'cable', entityId);
+            } else {
+                // Not in delete mode - treat as selection to show/hide vertices
+                dotNetReference.invokeMethodAsync('OnCableSelected', entityId);
             }
         });
     }
@@ -467,10 +487,14 @@ export function makeVertexDraggable(map, vertexMarker, cableId, vertexIndex, pol
             iconSize: [12, 12],
             iconAnchor: [6, 6]
         })
-    }).addTo(map);
+    });
+    // Note: Not adding to map initially - will be shown when cable is selected or dragging
+    // This keeps vertices hidden by default
     
-    // Remove the original circle marker
-    map.removeLayer(vertexMarker);
+    // Remove the original circle marker (if it was added to map)
+    if (map.hasLayer(vertexMarker)) {
+        map.removeLayer(vertexMarker);
+    }
     
     // Track the cable and vertex info
     draggableMarker._cableId = cableId;
@@ -483,9 +507,28 @@ export function makeVertexDraggable(map, vertexMarker, cableId, vertexIndex, pol
     }
     polyline._vertexMarkers[vertexIndex] = draggableMarker;
     
-    // Handle drag start
+    // Handle drag start - show vertex markers when dragging starts
     draggableMarker.on('dragstart', function(e) {
         map.dragging.disable(); // Disable map dragging while dragging the vertex
+        // Show all vertex markers for this cable when dragging starts
+        // This ensures all vertices are visible while editing
+        if (polyline._vertexMarkers) {
+            polyline._vertexMarkers.forEach(function(marker) {
+                if (marker) {
+                    if (!map.hasLayer(marker)) {
+                        marker.addTo(map); // Add marker to map if not already visible
+                    }
+                }
+            });
+        }
+        // Also ensure this marker is visible
+        if (!map.hasLayer(draggableMarker)) {
+            draggableMarker.addTo(map);
+        }
+        // Notify C# that dragging started so it can track selection state
+        if (dotNetReference) {
+            dotNetReference.invokeMethodAsync('OnCableVertexDragStart', cableId);
+        }
     });
     
     // Handle drag - update the polyline in real-time
@@ -513,6 +556,12 @@ export function makeVertexDraggable(map, vertexMarker, cableId, vertexIndex, pol
         // Call C# method to update the cable vertex in the database
         if (dotNetReference) {
             dotNetReference.invokeMethodAsync('OnCableVertexDragEnd', cableId, vertexIndex, newLat, newLng);
+        }
+        
+        // After drag ends, hide vertices if cable is not selected
+        // The C# method will handle showing/hiding based on selection state
+        if (dotNetReference) {
+            dotNetReference.invokeMethodAsync('OnCableVertexDragEndComplete', cableId);
         }
     });
     
