@@ -242,6 +242,14 @@ export function navigateToLocation(map, lat, lng) {
     });
 }
 
+// Function to invalidate the map size, forcing Leaflet to recalculate dimensions
+// This should be called after the container size changes (e.g., after DOM updates)
+export function invalidateMapSize(map) {
+    if (map) {
+        map.invalidateSize();
+    }
+}
+
 // Function to create a white circle marker for cable vertices
 // These markers are visible at each point of the cable (similar to Google My Maps)
 export function addCableVertexMarker(map, lat, lng) {

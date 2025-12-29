@@ -278,6 +278,13 @@ else
                 Console.WriteLine($"MAP RENDER ERROR: {ex.Message}");
             }
         }
+        else if (!firstRender && mapInstance != null && module != null)
+        {
+            // After non-initial renders, ensure map size is correct
+            // This prevents size issues when alerts appear/disappear
+            await Task.Delay(100); // Small delay to allow DOM to settle
+            await module.InvokeVoidAsync("invalidateMapSize", mapInstance);
+        }
     }
 
     /// <summary>
@@ -434,6 +441,14 @@ else
         if (module != null)
         {
             await module.InvokeVoidAsync("setDeleteMode", mode == MapMode.Delete);
+        }
+
+        // Ensure map size is recalculated after mode change to prevent size issues
+        // Use a small delay to allow DOM to update first
+        if (mapInstance != null && module != null)
+        {
+            await Task.Delay(50); // Small delay to allow DOM updates
+            await module.InvokeVoidAsync("invalidateMapSize", mapInstance);
         }
     }
 
