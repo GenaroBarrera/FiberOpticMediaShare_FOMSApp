@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Hosting;
 using FOMSApp.API.Data;
 using FOMSApp.Shared.Models;
+using System.IO;
 
 namespace FOMSApp.API.Controllers
 {
@@ -30,16 +32,24 @@ namespace FOMSApp.API.Controllers
         private readonly AppDbContext _context;
 
         /// <summary>
-        /// Constructor that receives the database context via dependency injection.
+        /// Provides access to the web application's file system paths (e.g., wwwroot folder).
+        /// Used to delete photo files when a vault is deleted.
+        /// </summary>
+        private readonly IWebHostEnvironment _env;
+
+        /// <summary>
+        /// Constructor that receives dependencies via dependency injection.
         /// 
         /// Dependency Injection Pattern: ASP.NET Core automatically provides an AppDbContext
         /// instance when creating this controller. This makes testing easier and ensures
         /// proper lifetime management (the framework handles disposal).
         /// </summary>
         /// <param name="context">The database context instance provided by the framework</param>
-        public VaultsController(AppDbContext context)
+        /// <param name="env">The web hosting environment instance for file system access</param>
+        public VaultsController(AppDbContext context, IWebHostEnvironment env)
         {
             _context = context;
+            _env = env;
         }
 
         /// <summary>
@@ -221,21 +231,60 @@ namespace FOMSApp.API.Controllers
         /// Note: This will also delete all photos associated with the vault if cascade delete is configured.
         /// If not, you may need to explicitly delete photos first to avoid foreign key constraint violations.
         /// </remarks>
+        /// <summary>
+        /// Deletes a vault from the database and removes all associated photo files from the file system.
+        /// </summary>
+        /// <param name="id">The unique ID of the vault to delete (from the URL route)</param>
+        /// <returns>
+        /// HTTP 204 No Content if successfully deleted, or HTTP 404 Not Found if the vault doesn't exist.
+        /// </returns>
+        /// <remarks>
+        /// This method:
+        /// 1. Finds all photos associated with the vault
+        /// 2. Deletes the physical photo files from the wwwroot/uploads directory
+        /// 3. Deletes the vault (cascade delete will automatically remove photo records from the database)
+        /// 
+        /// RESTful Best Practice: DELETE operations typically return 204 No Content (success with no body)
+        /// rather than 200 OK, because there's nothing meaningful to return after deletion.
+        /// </remarks>
         // DELETE: api/vaults/5
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteVault(int id)
         {
-            // Find the vault by primary key
-            var vault = await _context.Vaults.FindAsync(id);
+            // Find the vault by primary key, including its photos
+            var vault = await _context.Vaults
+                .Include(v => v.Photos) // Eagerly load photos so we can delete the files
+                .FirstOrDefaultAsync(v => v.Id == id);
             
             // Return 404 if not found (standard REST practice)
             if (vault == null)
                 return NotFound();
 
+            // Delete all photo files from the file system before deleting the vault
+            string uploadPath = Path.Combine(_env.WebRootPath, "uploads");
+            foreach (var photo in vault.Photos)
+            {
+                string filePath = Path.Combine(uploadPath, photo.FileName);
+                if (System.IO.File.Exists(filePath))
+                {
+                    try
+                    {
+                        System.IO.File.Delete(filePath);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log the error but continue with deletion
+                        // The database record will still be deleted via cascade delete
+                        Console.WriteLine($"Warning: Could not delete photo file {photo.FileName}: {ex.Message}");
+                    }
+                }
+            }
+
             // Mark the entity for deletion
+            // Cascade delete will automatically remove photo records from the database
             _context.Vaults.Remove(vault);
             
-            // Execute the SQL DELETE statement
+            // Execute the SQL DELETE statement (cascade delete handles photo records)
             await _context.SaveChangesAsync();
             
             // Return 204 No Content (successful deletion with no response body)

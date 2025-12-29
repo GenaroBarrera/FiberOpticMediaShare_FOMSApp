@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Hosting;
 using FOMSApp.API.Data;
 using FOMSApp.Shared.Models;
+using System.IO;
 
 namespace FOMSApp.API.Controllers
 {
@@ -25,12 +27,20 @@ namespace FOMSApp.API.Controllers
         private readonly AppDbContext _context;
 
         /// <summary>
-        /// Constructor that receives the database context via dependency injection.
+        /// Provides access to the web application's file system paths (e.g., wwwroot folder).
+        /// Used to delete photo files when a midpoint is deleted.
+        /// </summary>
+        private readonly IWebHostEnvironment _env;
+
+        /// <summary>
+        /// Constructor that receives dependencies via dependency injection.
         /// </summary>
         /// <param name="context">The database context instance</param>
-        public MidpointsController(AppDbContext context)
+        /// <param name="env">The web hosting environment instance for file system access</param>
+        public MidpointsController(AppDbContext context, IWebHostEnvironment env)
         {
             _context = context;
+            _env = env;
         }
 
         /// <summary>
@@ -190,21 +200,60 @@ namespace FOMSApp.API.Controllers
         /// RESTful Best Practice: DELETE operations typically return 204 No Content (success with no body)
         /// rather than 200 OK, because there's nothing meaningful to return after deletion.
         /// </remarks>
+        /// <summary>
+        /// Deletes a midpoint from the database and removes all associated photo files from the file system.
+        /// </summary>
+        /// <param name="id">The unique ID of the midpoint to delete (from the URL route)</param>
+        /// <returns>
+        /// HTTP 204 No Content if successfully deleted, or HTTP 404 Not Found if the midpoint doesn't exist.
+        /// </returns>
+        /// <remarks>
+        /// This method:
+        /// 1. Finds all photos associated with the midpoint
+        /// 2. Deletes the physical photo files from the wwwroot/uploads directory
+        /// 3. Deletes the midpoint (cascade delete will automatically remove photo records from the database)
+        /// 
+        /// RESTful Best Practice: DELETE operations typically return 204 No Content (success with no body)
+        /// rather than 200 OK, because there's nothing meaningful to return after deletion.
+        /// </remarks>
         // DELETE: api/midpoints/5
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteMidpoint(int id)
         {
-            // Find the midpoint by primary key
-            var midpoint = await _context.Midpoints.FindAsync(id);
+            // Find the midpoint by primary key, including its photos
+            var midpoint = await _context.Midpoints
+                .Include(m => m.Photos) // Eagerly load photos so we can delete the files
+                .FirstOrDefaultAsync(m => m.Id == id);
             
             // Return 404 if not found (standard REST practice)
             if (midpoint == null)
                 return NotFound();
 
+            // Delete all photo files from the file system before deleting the midpoint
+            string uploadPath = Path.Combine(_env.WebRootPath, "uploads");
+            foreach (var photo in midpoint.Photos)
+            {
+                string filePath = Path.Combine(uploadPath, photo.FileName);
+                if (System.IO.File.Exists(filePath))
+                {
+                    try
+                    {
+                        System.IO.File.Delete(filePath);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log the error but continue with deletion
+                        // The database record will still be deleted via cascade delete
+                        Console.WriteLine($"Warning: Could not delete photo file {photo.FileName}: {ex.Message}");
+                    }
+                }
+            }
+
             // Mark the entity for deletion
+            // Cascade delete will automatically remove photo records from the database
             _context.Midpoints.Remove(midpoint);
             
-            // Execute the SQL DELETE statement
+            // Execute the SQL DELETE statement (cascade delete handles photo records)
             await _context.SaveChangesAsync();
             
             // Return 204 No Content (successful deletion with no response body)

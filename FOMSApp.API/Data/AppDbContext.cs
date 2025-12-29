@@ -98,6 +98,22 @@ namespace FOMSApp.API.Data
                 .Property(v => v.Location) // Configure the Location property
                 .HasColumnType("geography"); // Store as SQL Server Geography type
 
+            // Configure cascade delete for Photos when Vault is deleted
+            // This ensures that when a vault is deleted, all associated photos are automatically deleted
+            modelBuilder.Entity<Photo>()
+                .HasOne(p => p.Vault)
+                .WithMany(v => v.Photos)
+                .HasForeignKey(p => p.VaultId)
+                .OnDelete(DeleteBehavior.Cascade); // Cascade delete: delete photos when vault is deleted
+
+            // Configure cascade delete for Photos when Midpoint is deleted
+            // This ensures that when a midpoint is deleted, all associated photos are automatically deleted
+            modelBuilder.Entity<Photo>()
+                .HasOne(p => p.Midpoint)
+                .WithMany(m => m.Photos)
+                .HasForeignKey(p => p.MidpointId)
+                .OnDelete(DeleteBehavior.Cascade); // Cascade delete: delete photos when midpoint is deleted
+
             // Note: Midpoint and Cable also have spatial properties (Point, LineString),
             // but Entity Framework Core with NetTopologySuite typically infers the correct
             // type automatically. If you encounter issues, you can configure them here too.
