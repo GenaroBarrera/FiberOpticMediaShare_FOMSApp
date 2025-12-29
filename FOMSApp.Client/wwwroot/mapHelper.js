@@ -66,17 +66,19 @@ export function addMarker(map, lat, lng, popupText, entityId, dotNetReference, c
     
     // If entityId and dotNetReference are provided, add click handler for deletion
     if (entityId && dotNetReference) {
+        // Override the default click behavior to handle delete mode
+        marker.off('click'); // Remove default click handler (which opens popup)
         marker.on('click', function(e) {
             // If in delete mode, prevent popup from opening and handle deletion
             if (isDeleteMode) {
-                e.originalEvent.stopPropagation(); // Prevent event bubbling
-                e.originalEvent.preventDefault(); // Prevent default behavior
+                L.DomEvent.stop(e); // Stop Leaflet event propagation
                 marker.closePopup(); // Close popup if it's already open
                 // Call C# method to handle the click (for deletion mode)
                 dotNetReference.invokeMethodAsync('OnEntityClick', 'vault', entityId);
-                return false; // Prevent further event handling
+            } else {
+                // If not in delete mode, open the popup manually
+                marker.openPopup();
             }
-            // If not in delete mode, let the popup open normally (default behavior)
         });
     }
     
@@ -143,17 +145,19 @@ export function addCircle(map, lat, lng, color, popupText, entityId, dotNetRefer
     
     // If entityId and dotNetReference are provided, add click handler for deletion
     if (entityId && dotNetReference) {
+        // Override the default click behavior to handle delete mode
+        circleMarker.off('click'); // Remove default click handler (which opens popup)
         circleMarker.on('click', function(e) {
             // If in delete mode, prevent popup from opening and handle deletion
             if (isDeleteMode) {
-                e.originalEvent.stopPropagation(); // Prevent event bubbling
-                e.originalEvent.preventDefault(); // Prevent default behavior
+                L.DomEvent.stop(e); // Stop Leaflet event propagation
                 circleMarker.closePopup(); // Close popup if it's already open
                 // Call C# method to handle the click (for deletion mode)
                 dotNetReference.invokeMethodAsync('OnEntityClick', 'midpoint', entityId);
-                return false; // Prevent further event handling
+            } else {
+                // If not in delete mode, open the popup manually
+                circleMarker.openPopup();
             }
-            // If not in delete mode, let the popup open normally (default behavior)
         });
     }
     

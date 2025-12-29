@@ -137,11 +137,12 @@ else
     }
 
     /// <summary>
-    /// Calculates and formats the cable length in meters and kilometers.
-    /// Uses the Haversine formula to calculate the great-circle distance between consecutive points.
+    /// Calculates and formats the cable length in feet.
+    /// Uses the Haversine formula to calculate the great-circle distance between consecutive points,
+    /// then converts the result from meters to feet for display.
     /// </summary>
     /// <param name="cable">The cable object containing the Path LineString</param>
-    /// <returns>A formatted string showing the length in meters and kilometers</returns>
+    /// <returns>A formatted string showing the length in feet</returns>
     private string GetCableLength(Cable? cable)
     {
         if (cable?.Path == null || cable.Path.NumPoints < 2)
@@ -176,15 +177,20 @@ else
             totalLengthMeters += distanceMeters;
         }
 
-        // Format the result
-        if (totalLengthMeters < 1000)
+        // Convert meters to feet (1 meter = 3.28084 feet)
+        const double metersToFeet = 3.28084;
+        double totalLengthFeet = totalLengthMeters * metersToFeet;
+
+        // Format the result in feet
+        if (totalLengthFeet < 5280) // Less than 1 mile
         {
-            return $"{totalLengthMeters:F2} meters";
+            return $"{totalLengthFeet:F2} feet";
         }
         else
         {
-            double kilometers = totalLengthMeters / 1000.0;
-            return $"{kilometers:F3} km ({totalLengthMeters:F2} meters)";
+            // Display in both miles and feet for longer cables
+            double miles = totalLengthFeet / 5280.0;
+            return $"{miles:F3} miles ({totalLengthFeet:F2} feet)";
         }
     }
 
