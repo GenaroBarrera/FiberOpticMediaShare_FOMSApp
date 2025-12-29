@@ -13,11 +13,23 @@ export function initMap(elementId) {
     // 1. Create the map and center it on San Antonio, TX
     var map = L.map(elementId).setView([29.54248, -98.73548], 18); // Latitude, Longitude, Zoom level (18 for street-level detail)
 
-    // 2. Add the "Tile Layer" (the actual map images from OpenStreetMap)
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    // 2. Add the satellite imagery base layer (Esri World Imagery - free, no API key required)
+    var satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         maxZoom: 19,
-        attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-    }).addTo(map); // Add the tile layer to the map
+        attribution: '&copy; <a href="https://www.esri.com/">Esri</a> &mdash; Source: Esri, Maxar, GeoEye, Earthstar Geographics, CNES/Airbus DS, USDA, USGS, AeroGRID, IGN, and the GIS User Community'
+    }).addTo(map); // Add the satellite imagery as the base layer
+
+    // 3. Add road labels and street overlay layer on top of satellite imagery
+    // This provides road names, street outlines, and sidewalk information
+    var roadLabelsLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 19,
+        opacity: 0.7, // Semi-transparent so satellite imagery shows through
+        attribution: '&copy; <a href="https://www.esri.com/">Esri</a>'
+    }).addTo(map); // Add the road labels layer on top
+
+    // Store layer references for potential future use (e.g., layer switching)
+    map._satelliteLayer = satelliteLayer;
+    map._roadLabelsLayer = roadLabelsLayer;
 
     return map; // Return the map object to C#
 }
