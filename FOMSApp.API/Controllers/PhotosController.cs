@@ -316,6 +316,150 @@ namespace FOMSApp.API.Controllers
         }
 
         /// <summary>
+        /// Downloads photos for multiple vaults and midpoints as a single ZIP file.
+        /// Each entity's photos are placed in a separate folder named after the entity.
+        /// </summary>
+        /// <param name="vaultIds">Comma-separated list of vault IDs to download photos from</param>
+        /// <param name="midpointIds">Comma-separated list of midpoint IDs to download photos from</param>
+        /// <returns>
+        /// HTTP 200 OK with a ZIP file containing folders for each entity, or HTTP 400 Bad Request if no IDs provided.
+        /// </returns>
+        /// <remarks>
+        /// This endpoint creates a single ZIP archive containing folders for each selected vault and midpoint.
+        /// Each folder is named after the entity and contains all photos associated with that entity.
+        /// The ZIP file structure: VaultName_Photos/photo1.jpg, MidpointName_Photos/photo1.jpg, etc.
+        /// </remarks>
+        // GET: api/photos/batch-download?vaultIds=1,2,3&midpointIds=4,5
+        [HttpGet("batch-download")]
+        public async Task<IActionResult> BatchDownloadPhotos([FromQuery] string? vaultIds, [FromQuery] string? midpointIds)
+        {
+            // Parse vault IDs
+            var vaultIdList = new List<int>();
+            if (!string.IsNullOrWhiteSpace(vaultIds))
+            {
+                foreach (var idStr in vaultIds.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    if (int.TryParse(idStr.Trim(), out int vaultId))
+                    {
+                        vaultIdList.Add(vaultId);
+                    }
+                }
+            }
+
+            // Parse midpoint IDs
+            var midpointIdList = new List<int>();
+            if (!string.IsNullOrWhiteSpace(midpointIds))
+            {
+                foreach (var idStr in midpointIds.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    if (int.TryParse(idStr.Trim(), out int midpointId))
+                    {
+                        midpointIdList.Add(midpointId);
+                    }
+                }
+            }
+
+            // Validate that at least one ID was provided
+            if (vaultIdList.Count == 0 && midpointIdList.Count == 0)
+            {
+                return BadRequest("At least one vault ID or midpoint ID must be provided.");
+            }
+
+            // Create a memory stream for the ZIP file
+            using var memoryStream = new MemoryStream();
+            
+            // Create a ZIP archive in the memory stream
+            using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, true))
+            {
+                // Process vaults
+                foreach (var vaultId in vaultIdList)
+                {
+                    var photos = await _context.Photos
+                        .Where(p => p.VaultId == vaultId)
+                        .ToListAsync();
+
+                    if (photos != null && photos.Count > 0)
+                    {
+                        // Get the vault name for the folder name
+                        var vault = await _context.Vaults.FindAsync(vaultId);
+                        string vaultName = vault?.Name ?? $"Vault_{vaultId}";
+                        string safeVaultName = string.Join("_", vaultName.Split(Path.GetInvalidFileNameChars()));
+                        string folderName = $"{safeVaultName}_Photos";
+
+                        foreach (var photo in photos)
+                        {
+                            string filePath = Path.Combine(_env.WebRootPath, "uploads", photo.FileName);
+                            
+                            // Only add files that actually exist on disk
+                            if (System.IO.File.Exists(filePath))
+                            {
+                                // Create an entry in the ZIP archive within the vault's folder
+                                string entryName = $"{folderName}/{photo.Id}_{photo.FileName}";
+                                var entry = archive.CreateEntry(entryName);
+                                
+                                // Copy the file content into the ZIP entry
+                                using (var entryStream = entry.Open())
+                                using (var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+                                {
+                                    await fileStream.CopyToAsync(entryStream);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Process midpoints
+                foreach (var midpointId in midpointIdList)
+                {
+                    var photos = await _context.Photos
+                        .Where(p => p.MidpointId == midpointId)
+                        .ToListAsync();
+
+                    if (photos != null && photos.Count > 0)
+                    {
+                        // Get the midpoint name for the folder name
+                        var midpoint = await _context.Midpoints.FindAsync(midpointId);
+                        string midpointName = midpoint?.Name ?? $"Midpoint_{midpointId}";
+                        string safeMidpointName = string.Join("_", midpointName.Split(Path.GetInvalidFileNameChars()));
+                        string folderName = $"{safeMidpointName}_Photos";
+
+                        foreach (var photo in photos)
+                        {
+                            string filePath = Path.Combine(_env.WebRootPath, "uploads", photo.FileName);
+                            
+                            // Only add files that actually exist on disk
+                            if (System.IO.File.Exists(filePath))
+                            {
+                                // Create an entry in the ZIP archive within the midpoint's folder
+                                string entryName = $"{folderName}/{photo.Id}_{photo.FileName}";
+                                var entry = archive.CreateEntry(entryName);
+                                
+                                // Copy the file content into the ZIP entry
+                                using (var entryStream = entry.Open())
+                                using (var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+                                {
+                                    await fileStream.CopyToAsync(entryStream);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Reset the stream position to the beginning
+            memoryStream.Position = 0;
+
+            // Generate a filename based on the number of entities
+            int totalEntities = vaultIdList.Count + midpointIdList.Count;
+            string zipFileName = totalEntities == 1 
+                ? "Selected_Photos.zip" 
+                : $"Selected_Photos_{totalEntities}_Items.zip";
+
+            // Return the ZIP file with appropriate headers
+            return File(memoryStream.ToArray(), "application/zip", zipFileName);
+        }
+
+        /// <summary>
         /// Deletes a photo from the database and removes the physical file from disk.
         /// </summary>
         /// <param name="id">The unique ID of the photo to delete (from the URL route)</param>

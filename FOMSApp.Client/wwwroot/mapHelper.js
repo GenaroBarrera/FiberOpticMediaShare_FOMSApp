@@ -3,9 +3,17 @@
 // Global variable to track if we're in delete mode
 var isDeleteMode = false;
 
+// Global variable to track if we're in select mode
+var isSelectMode = false;
+
 // Function to set the delete mode state
 export function setDeleteMode(enabled) {
     isDeleteMode = enabled;
+}
+
+// Function to set the select mode state
+export function setSelectMode(enabled) {
+    isSelectMode = enabled;
 }
 
 // Function to initialize the map
@@ -91,7 +99,9 @@ export function toggleMapView(map, useSatellite) {
 // Function to create a custom colored icon for vault markers
 // Returns a Leaflet DivIcon configured with the specified color
 // Vault markers are triangles pointing down (point at bottom) with white outline, slightly larger than midpoint markers
-function createColoredIcon(color) {
+// If isSelected is true, adds a highlight border/glow effect
+function createColoredIcon(color, isSelected) {
+    isSelected = isSelected || false;
     // Map color names to hex values for better browser compatibility
     var colorMap = {
         'Blue': '#0066CC',
@@ -107,10 +117,13 @@ function createColoredIcon(color) {
     // Create an SVG triangle marker with white outline, pointing down (point at bottom)
     // Size: 24x24 (slightly larger than midpoint which is 20x20, but smaller than previous 26x26)
     // Triangle points downward with point at the bottom
+    // If selected, add a yellow highlight border
+    var strokeColor = isSelected ? '#FFD700' : 'white'; // Gold/yellow for selected, white for normal
+    var strokeWidth = isSelected ? '3' : '2'; // Thicker border when selected
     var svgIcon = '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">' +
         // Triangle pointing down (point at bottom, base at top)
         '<path d="M 12 22 L 2 2 L 22 2 Z" ' +
-        'fill="' + hexColor + '" stroke="white" stroke-width="2"/>' +
+        'fill="' + hexColor + '" stroke="' + strokeColor + '" stroke-width="' + strokeWidth + '"/>' +
         '</svg>';
     
     return L.divIcon({
@@ -124,9 +137,10 @@ function createColoredIcon(color) {
 
 // Function to add a marker to the map with a custom color
 // Returns the marker so it can be stored and deleted later
-export function addMarker(map, lat, lng, popupText, entityId, dotNetReference, color) {
+export function addMarker(map, lat, lng, popupText, entityId, dotNetReference, color, isSelected) {
+    isSelected = isSelected || false;
     // Create a custom colored icon if color is provided, otherwise use default blue
-    var icon = color ? createColoredIcon(color) : undefined;
+    var icon = color ? createColoredIcon(color, isSelected) : undefined;
     
     // Make the marker draggable so users can move it to a new location
     var marker = L.marker([lat, lng], { icon: icon, draggable: true }).addTo(map);
@@ -149,7 +163,7 @@ export function addMarker(map, lat, lng, popupText, entityId, dotNetReference, c
     
     // If entityId and dotNetReference are provided, add click handler for deletion and drag handler for moving
     if (entityId && dotNetReference) {
-        // Override the default click behavior to handle delete mode
+        // Override the default click behavior to handle delete and select modes
         marker.off('click'); // Remove default click handler (which opens popup)
         marker.on('click', function(e) {
             // If in delete mode, prevent popup from opening and handle deletion
@@ -158,8 +172,14 @@ export function addMarker(map, lat, lng, popupText, entityId, dotNetReference, c
                 marker.closePopup(); // Close popup if it's already open
                 // Call C# method to handle the click (for deletion mode)
                 dotNetReference.invokeMethodAsync('OnEntityClick', 'vault', entityId);
+            } else if (isSelectMode) {
+                // If in select mode, prevent popup from opening and handle selection
+                L.DomEvent.stop(e); // Stop Leaflet event propagation
+                marker.closePopup(); // Close popup if it's already open
+                // Call C# method to handle the click (for selection mode)
+                dotNetReference.invokeMethodAsync('OnEntityClick', 'vault', entityId);
             } else {
-                // If not in delete mode, open the popup manually
+                // If not in delete or select mode, open the popup manually
                 marker.openPopup();
             }
         });
@@ -179,7 +199,9 @@ export function addMarker(map, lat, lng, popupText, entityId, dotNetReference, c
 // Function to create a custom colored icon for midpoint markers
 // Returns a Leaflet DivIcon configured with the specified color
 // Midpoints use a square/diamond shape to distinguish them from vault pin markers
-function createColoredMidpointIcon(color) {
+// If isSelected is true, adds a highlight border/glow effect
+function createColoredMidpointIcon(color, isSelected) {
+    isSelected = isSelected || false;
     // Map color names to hex values for better browser compatibility
     var colorMap = {
         'Black': '#000000',
@@ -193,10 +215,13 @@ function createColoredMidpointIcon(color) {
     
     // Create an SVG square/diamond marker with the specified color
     // This creates a distinct shape from vault pins (which are circular pins)
+    // If selected, add a yellow highlight border
+    var strokeColor = isSelected ? '#FFD700' : 'white'; // Gold/yellow for selected, white for normal
+    var strokeWidth = isSelected ? '3' : '2'; // Thicker border when selected
     var svgIcon = '<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">' +
         // Diamond/square shape rotated 45 degrees
         '<rect x="5" y="5" width="10" height="10" transform="rotate(45 10 10)" ' +
-        'fill="' + hexColor + '" stroke="white" stroke-width="2"/>' +
+        'fill="' + hexColor + '" stroke="' + strokeColor + '" stroke-width="' + strokeWidth + '"/>' +
         '</svg>';
     
     return L.divIcon({
@@ -211,9 +236,10 @@ function createColoredMidpointIcon(color) {
 // Function to add a small circle marker (Dot)
 // Returns the circle marker so it can be stored and deleted later
 // Updated to use custom colored icons based on status
-export function addCircle(map, lat, lng, color, popupText, entityId, dotNetReference) {
+export function addCircle(map, lat, lng, color, popupText, entityId, dotNetReference, isSelected) {
+    isSelected = isSelected || false;
     // Create a custom colored icon if color is provided, otherwise use default circle marker
-    var icon = color ? createColoredMidpointIcon(color) : undefined;
+    var icon = color ? createColoredMidpointIcon(color, isSelected) : undefined;
     
     // Use circle marker if no custom icon, otherwise use marker with custom icon
     var circleMarker;
@@ -256,7 +282,7 @@ export function addCircle(map, lat, lng, color, popupText, entityId, dotNetRefer
     
     // If entityId and dotNetReference are provided, add click handler for deletion and drag handler for moving
     if (entityId && dotNetReference) {
-        // Override the default click behavior to handle delete mode
+        // Override the default click behavior to handle delete and select modes
         circleMarker.off('click'); // Remove default click handler (which opens popup)
         circleMarker.on('click', function(e) {
             // If in delete mode, prevent popup from opening and handle deletion
@@ -265,8 +291,14 @@ export function addCircle(map, lat, lng, color, popupText, entityId, dotNetRefer
                 circleMarker.closePopup(); // Close popup if it's already open
                 // Call C# method to handle the click (for deletion mode)
                 dotNetReference.invokeMethodAsync('OnEntityClick', 'midpoint', entityId);
+            } else if (isSelectMode) {
+                // If in select mode, prevent popup from opening and handle selection
+                L.DomEvent.stop(e); // Stop Leaflet event propagation
+                circleMarker.closePopup(); // Close popup if it's already open
+                // Call C# method to handle the click (for selection mode)
+                dotNetReference.invokeMethodAsync('OnEntityClick', 'midpoint', entityId);
             } else {
-                // If not in delete mode, open the popup manually
+                // If not in delete or select mode, open the popup manually
                 circleMarker.openPopup();
             }
         });
@@ -684,6 +716,57 @@ export function makeVertexDraggable(map, vertexMarker, cableId, vertexIndex, pol
     });
     
     return draggableMarker;
+}
+
+// Note: Selection is now handled directly by clicking markers/circles in Select mode
+// The window.selectEntity function is no longer needed
+
+// Function to update marker selection visual state
+// This is called from C# to update the marker highlight after selection changes
+export function setMarkerSelection(layer, isSelected) {
+    if (!layer) return;
+    
+    // Get the current icon
+    var currentIcon = layer.options.icon;
+    if (!currentIcon || !currentIcon.options) return;
+    
+    // Get the color from the current icon HTML (extract from SVG)
+    var currentHtml = currentIcon.options.html;
+    if (!currentHtml) return;
+    
+    // Extract color from the SVG fill attribute
+    var fillMatch = currentHtml.match(/fill="([^"]+)"/);
+    if (!fillMatch) return;
+    
+    var color = fillMatch[1];
+    
+    // Create new icon with selection state
+    var newIcon = createColoredIcon(color, isSelected);
+    layer.setIcon(newIcon);
+}
+
+// Function to update circle marker selection visual state
+// This is called from C# to update the marker highlight after selection changes
+export function setCircleSelection(layer, isSelected) {
+    if (!layer) return;
+    
+    // Get the current icon
+    var currentIcon = layer.options.icon;
+    if (!currentIcon || !currentIcon.options) return;
+    
+    // Get the color from the current icon HTML (extract from SVG)
+    var currentHtml = currentIcon.options.html;
+    if (!currentHtml) return;
+    
+    // Extract color from the SVG fill attribute
+    var fillMatch = currentHtml.match(/fill="([^"]+)"/);
+    if (!fillMatch) return;
+    
+    var color = fillMatch[1];
+    
+    // Create new icon with selection state
+    var newIcon = createColoredMidpointIcon(color, isSelected);
+    layer.setIcon(newIcon);
 }
 
 // Global function to download a file from base64 data with folder selection

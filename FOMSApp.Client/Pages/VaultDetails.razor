@@ -530,12 +530,11 @@ else
                 // Get the ZIP file as a byte array
                 var zipBytes = await response.Content.ReadAsByteArrayAsync();
                 
-                // Get the filename from the Content-Disposition header, or use a default
-                string fileName = "Vault_Photos.zip";
-                if (response.Content.Headers.ContentDisposition != null)
-                {
-                    fileName = response.Content.Headers.ContentDisposition.FileName?.Trim('"') ?? fileName;
-                }
+                // Construct filename using the vault name
+                // Sanitize the vault name to remove invalid filename characters
+                string vaultName = vault?.Name ?? $"Vault_{Id}";
+                string safeVaultName = string.Join("_", vaultName.Split(System.IO.Path.GetInvalidFileNameChars()));
+                string fileName = $"{safeVaultName}_Photos.zip";
 
                 // Use JavaScript to trigger the download
                 await JS.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(zipBytes));

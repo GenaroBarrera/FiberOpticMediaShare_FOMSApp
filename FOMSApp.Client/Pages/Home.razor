@@ -57,6 +57,26 @@ else
                         title="@(undoHistory.Count > 0 ? $"Undo last action ({undoHistory.Count} available)" : "No actions to undo")">
                     ↶ Undo
                 </button>
+                <button type="button" 
+                        class="btn @(currentMode == MapMode.Select ? "btn-primary" : "btn-outline-primary")"
+                        @onclick="async () => await SetMode(MapMode.Select)">
+                    Select
+                </button>
+                <button type="button" 
+                        class="btn btn-success"
+                        @onclick="async () => await DownloadSelectedPhotos()"
+                        disabled="@(isDownloadingSelected || (selectedVaultIds.Count == 0 && selectedMidpointIds.Count == 0))"
+                        title="@(selectedVaultIds.Count + selectedMidpointIds.Count > 0 ? $"Download photos from {selectedVaultIds.Count + selectedMidpointIds.Count} selected item(s)" : "Select vaults or midpoints to download photos")">
+                    @if (isDownloadingSelected)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        <text>Downloading...</text>
+                    }
+                    else
+                    {
+                        <text>📥 Download Selected (@(selectedVaultIds.Count + selectedMidpointIds.Count))</text>
+                    }
+                </button>
             </div>
         </div>
 
@@ -292,7 +312,8 @@ else
         AddVault,       // Click on map to create a new vault
         AddMidpoint,    // Click on map to create a new midpoint
         DrawCable,      // Click multiple points to define a cable path
-        Delete          // Click on existing items to delete them
+        Delete,         // Click on existing items to delete them
+        Select          // Click on vaults/midpoints to select them for batch operations
     }
 
     private Vault[]? vaults;
@@ -327,6 +348,22 @@ else
     /// Indicates whether the map is currently displaying satellite view (true) or default map view (false).
     /// </summary>
     private bool isSatelliteView = false;
+
+    /// <summary>
+    /// Set of vault IDs that have been selected for batch operations (e.g., downloading photos).
+    /// </summary>
+    private HashSet<int> selectedVaultIds = new();
+
+    /// <summary>
+    /// Set of midpoint IDs that have been selected for batch operations (e.g., downloading photos).
+    /// </summary>
+    private HashSet<int> selectedMidpointIds = new();
+
+    /// <summary>
+    /// Indicates whether photos are currently being downloaded for selected entities.
+    /// Used to disable the download button and show a loading state during download.
+    /// </summary>
+    private bool isDownloadingSelected = false;
     
     /// <summary>
     /// Temporary storage for points collected while drawing a cable.
@@ -465,8 +502,9 @@ else
                 dotNetReference = DotNetObjectReference.Create(this);
                 await SetupMapClickListener();
                 
-                // Initialize delete mode state in JavaScript
+                // Initialize delete and select mode state in JavaScript
                 await module.InvokeVoidAsync("setDeleteMode", currentMode == MapMode.Delete);
+                await module.InvokeVoidAsync("setSelectMode", currentMode == MapMode.Select);
 
                 // 1. Draw VAULTS (Pins) - Store layer references for deletion
                 foreach (var vault in vaults)
@@ -506,8 +544,10 @@ else
                             $"</div>";
                         // Ensure we have a valid color (use status-based color if Color is not set)
                         string vaultColor = !string.IsNullOrWhiteSpace(vault.Color) ? vault.Color : GetStatusColor(vault.Status);
+                        // Check if this vault is selected for highlighting
+                        bool isSelected = selectedVaultIds.Contains(vault.Id);
                         // Pass the vault's Color property to display the marker in the correct status color
-                        var markerRef = await module.InvokeAsync<IJSObjectReference>("addMarker", mapInstance, vault.Location.Y, vault.Location.X, popup, vault.Id, dotNetReference, vaultColor);
+                        var markerRef = await module.InvokeAsync<IJSObjectReference>("addMarker", mapInstance, vault.Location.Y, vault.Location.X, popup, vault.Id, dotNetReference, vaultColor, isSelected);
                         mapLayers[$"vault_{vault.Id}"] = markerRef;
                         
                         // Attach edit button handler
@@ -551,10 +591,10 @@ else
                             $"<a href='midpoint/{mp.Id}' style='font-size: 11px;'>View Details</a>" +
                             $"</div>" +
                             $"</div>";
-                        // Ensure we have a valid color (use status-based color if Color is not set)
+                        // Check if this midpoint is selected for highlighting
+                        bool isSelected = selectedMidpointIds.Contains(mp.Id);
                         string midpointColor = !string.IsNullOrWhiteSpace(mp.Color) ? mp.Color : GetMidpointStatusColor(mp.Status);
-                        // Pass the midpoint's Color property to display the marker in the correct status color
-                        var circleRef = await module.InvokeAsync<IJSObjectReference>("addCircle", mapInstance, mp.Location.Y, mp.Location.X, midpointColor, popup, mp.Id, dotNetReference);
+                        var circleRef = await module.InvokeAsync<IJSObjectReference>("addCircle", mapInstance, mp.Location.Y, mp.Location.X, midpointColor, popup, mp.Id, dotNetReference, isSelected);
                         mapLayers[$"midpoint_{mp.Id}"] = circleRef;
                         
                         // Attach edit button handler
@@ -574,6 +614,9 @@ else
             catch(Exception ex)
             {
                 Console.WriteLine($"MAP RENDER ERROR: {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                // Show error to user if map fails to render
+                await JS.InvokeVoidAsync("alert", $"Failed to initialize map: {ex.Message}");
             }
         }
         else if (!firstRender && mapInstance != null && module != null)
@@ -599,21 +642,56 @@ else
     }
 
     /// <summary>
-    /// Handles clicks on map entities (vaults, midpoints, cables) when in Delete mode.
+    /// Handles clicks on map entities (vaults, midpoints, cables) when in Delete or Select mode.
     /// This method is called from JavaScript when a user clicks on a marker, circle, or polyline.
     /// </summary>
     /// <param name="entityType">The type of entity clicked: "vault", "midpoint", or "cable"</param>
-    /// <param name="entityId">The unique ID of the entity to delete</param>
+    /// <param name="entityId">The unique ID of the entity</param>
     [JSInvokable]
     public async Task OnEntityClick(string entityType, int entityId)
     {
         // Log for debugging
         Console.WriteLine($"OnEntityClick called: type={entityType}, id={entityId}, currentMode={currentMode}");
         
+        // Handle selection mode
+        if (currentMode == MapMode.Select)
+        {
+            string lowerType = entityType.ToLower();
+            if (lowerType == "vault")
+            {
+                if (selectedVaultIds.Contains(entityId))
+                {
+                    selectedVaultIds.Remove(entityId);
+                }
+                else
+                {
+                    selectedVaultIds.Add(entityId);
+                }
+                StateHasChanged();
+                // Update marker visual to reflect selection state
+                await UpdateVaultMarkerSelection(entityId);
+            }
+            else if (lowerType == "midpoint")
+            {
+                if (selectedMidpointIds.Contains(entityId))
+                {
+                    selectedMidpointIds.Remove(entityId);
+                }
+                else
+                {
+                    selectedMidpointIds.Add(entityId);
+                }
+                StateHasChanged();
+                // Update marker visual to reflect selection state
+                await UpdateMidpointMarkerSelection(entityId);
+            }
+            return;
+        }
+        
         // Only handle deletion if we're in Delete mode
         if (currentMode != MapMode.Delete)
         {
-            Console.WriteLine($"Not in delete mode, ignoring click. Current mode: {currentMode}");
+            Console.WriteLine($"Not in delete or select mode, ignoring click. Current mode: {currentMode}");
             return;
         }
 
@@ -727,26 +805,52 @@ else
     /// <param name="mode">The mode to switch to.</param>
     private async Task SetMode(MapMode mode)
     {
-        // If switching away from DrawCable mode, cancel any in-progress cable
-        if (currentMode == MapMode.DrawCable && mode != MapMode.DrawCable)
+        try
         {
-            await CancelCable();
+            // If clicking Select button again while already in Select mode, toggle to View mode
+            if (currentMode == MapMode.Select && mode == MapMode.Select)
+            {
+                mode = MapMode.View;
+            }
+
+            // If switching away from DrawCable mode, cancel any in-progress cable
+            if (currentMode == MapMode.DrawCable && mode != MapMode.DrawCable)
+            {
+                await CancelCable();
+            }
+
+            // Clear selections when switching away from Select mode or when toggling Select off
+            bool wasInSelectMode = currentMode == MapMode.Select;
+            bool isLeavingSelectMode = wasInSelectMode && mode != MapMode.Select;
+            
+            if (isLeavingSelectMode || mode != MapMode.Select)
+            {
+                // Clear selections and update marker visuals
+                await ClearAllSelections();
+            }
+
+            currentMode = mode;
+
+            // Update JavaScript delete mode state so click handlers know the current mode
+            if (module != null)
+            {
+                await module.InvokeVoidAsync("setDeleteMode", mode == MapMode.Delete);
+                await module.InvokeVoidAsync("setSelectMode", mode == MapMode.Select);
+            }
+
+            // Ensure map size is recalculated after mode change to prevent size issues
+            // Use a small delay to allow DOM to update first
+            if (mapInstance != null && module != null)
+            {
+                await Task.Delay(50); // Small delay to allow DOM updates
+                await module.InvokeVoidAsync("invalidateMapSize", mapInstance);
+            }
         }
-
-        currentMode = mode;
-
-        // Update JavaScript delete mode state so click handlers know the current mode
-        if (module != null)
+        catch (Exception ex)
         {
-            await module.InvokeVoidAsync("setDeleteMode", mode == MapMode.Delete);
-        }
-
-        // Ensure map size is recalculated after mode change to prevent size issues
-        // Use a small delay to allow DOM to update first
-        if (mapInstance != null && module != null)
-        {
-            await Task.Delay(50); // Small delay to allow DOM updates
-            await module.InvokeVoidAsync("invalidateMapSize", mapInstance);
+            Console.WriteLine($"Error in SetMode: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            // Don't show alert for mode switching errors - just log them
         }
     }
 
@@ -761,6 +865,7 @@ else
             MapMode.AddMidpoint => "Click on the map to add a new midpoint at that location.",
             MapMode.DrawCable => "Click multiple points on the map to define the cable path. Click 'Finish Cable' when done.",
             MapMode.Delete => "Click on a vault, midpoint, or cable to delete it.",
+            MapMode.Select => "Click on vaults or midpoints to select them. Use 'Download Selected' to download photos from selected items.",
             _ => ""
         };
     }
@@ -779,6 +884,7 @@ else
             MapMode.AddMidpoint => "cursor-crosshair",
             MapMode.DrawCable => "cursor-crosshair",
             MapMode.Delete => "cursor-pointer",
+            MapMode.Select => "cursor-pointer",
             _ => "cursor-default"
         };
     }
@@ -2497,14 +2603,28 @@ else
 
             if (vault != null && vault.Location != null)
             {
+                // Load photos for this vault
+                List<Photo>? vaultPhotos = null;
+                try
+                {
+                    vaultPhotos = await Http.GetFromJsonAsync<List<Photo>>($"api/photos/vault/{vaultId}");
+                }
+                catch
+                {
+                    // If photos fail to load, continue without them
+                }
+
                 // Build updated popup content
                 string descriptionText = string.IsNullOrWhiteSpace(vault.Description) 
                     ? "No description provided." 
                     : System.Net.WebUtility.HtmlEncode(vault.Description);
                 string coordinates = $"{vault.Location.Y:F6}, {vault.Location.X:F6}";
                 string editButtonId = $"editVault_{vault.Id}";
-                string popup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
+                string photosHtml = BuildPhotosHtml(vault.Id, vaultPhotos, "vault");
+                
+                string popup = $"<div style='font-size: 12px; line-height: 1.6; width: 300px;'>" +
                     $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(vault.Name)}<br>" +
+                    photosHtml +
                     $"<strong>Status:</strong> {vault.Status}<br>" +
                     $"<strong>Description:</strong> {descriptionText}<br>" +
                     $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
@@ -2516,12 +2636,13 @@ else
                 
                 // Get the updated color (API should have updated it based on status)
                 string vaultColor = !string.IsNullOrWhiteSpace(vault.Color) ? vault.Color : GetStatusColor(vault.Status);
+                bool isSelected = selectedVaultIds.Contains(vaultId);
                 
                 // Remove the old marker
                 await module.InvokeVoidAsync("removeLayer", mapInstance, mapLayers[$"vault_{vaultId}"]);
                 
                 // Create a new marker with updated color and popup
-                var newMarkerRef = await module.InvokeAsync<IJSObjectReference>("addMarker", mapInstance, vault.Location.Y, vault.Location.X, popup, vault.Id, dotNetReference, vaultColor);
+                var newMarkerRef = await module.InvokeAsync<IJSObjectReference>("addMarker", mapInstance, vault.Location.Y, vault.Location.X, popup, vault.Id, dotNetReference, vaultColor, isSelected);
                 mapLayers[$"vault_{vaultId}"] = newMarkerRef;
                 
                 // Attach edit button handler
@@ -2531,6 +2652,151 @@ else
         catch (Exception ex)
         {
             Console.WriteLine($"Error updating vault popup: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Updates the marker visual state for a vault when selection changes.
+    /// Highlights the marker to show it's selected.
+    /// </summary>
+    /// <param name="vaultId">The ID of the vault to update</param>
+    private async Task UpdateVaultMarkerSelection(int vaultId)
+    {
+        if (module == null || mapInstance == null || !mapLayers.ContainsKey($"vault_{vaultId}"))
+            return;
+
+        try
+        {
+            bool isSelected = selectedVaultIds.Contains(vaultId);
+            // Update the marker visual to show/hide selection highlight
+            await module.InvokeVoidAsync("setMarkerSelection", mapLayers[$"vault_{vaultId}"], isSelected);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating vault marker selection: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Updates the marker visual state for a midpoint when selection changes.
+    /// Highlights the marker to show it's selected.
+    /// </summary>
+    /// <param name="midpointId">The ID of the midpoint to update</param>
+    private async Task UpdateMidpointMarkerSelection(int midpointId)
+    {
+        if (module == null || mapInstance == null || !mapLayers.ContainsKey($"midpoint_{midpointId}"))
+            return;
+
+        try
+        {
+            bool isSelected = selectedMidpointIds.Contains(midpointId);
+            // Update the marker visual to show/hide selection highlight
+            await module.InvokeVoidAsync("setCircleSelection", mapLayers[$"midpoint_{midpointId}"], isSelected);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating midpoint marker selection: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Clears all selections and updates marker visuals to remove highlighting.
+    /// </summary>
+    private async Task ClearAllSelections()
+    {
+        // Store the IDs before clearing so we can update their visuals
+        var vaultIdsToUpdate = selectedVaultIds.ToList();
+        var midpointIdsToUpdate = selectedMidpointIds.ToList();
+
+        // Clear the selection sets
+        selectedVaultIds.Clear();
+        selectedMidpointIds.Clear();
+
+        // Update marker visuals to remove highlighting
+        foreach (var vaultId in vaultIdsToUpdate)
+        {
+            await UpdateVaultMarkerSelection(vaultId);
+        }
+
+        foreach (var midpointId in midpointIdsToUpdate)
+        {
+            await UpdateMidpointMarkerSelection(midpointId);
+        }
+
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Downloads photos for all selected vaults and midpoints as a single ZIP file.
+    /// Each entity's photos are placed in a separate folder within the ZIP file.
+    /// </summary>
+    private async Task DownloadSelectedPhotos()
+    {
+        if (selectedVaultIds.Count == 0 && selectedMidpointIds.Count == 0)
+        {
+            await JS.InvokeVoidAsync("alert", "No items selected. Please select vaults or midpoints first.");
+            return;
+        }
+
+        isDownloadingSelected = true;
+        StateHasChanged();
+
+        try
+        {
+            // Build query string with vault and midpoint IDs
+            string vaultIdsParam = string.Join(",", selectedVaultIds);
+            string midpointIdsParam = string.Join(",", selectedMidpointIds);
+            
+            // Build the URL with query parameters
+            string url = "api/photos/batch-download";
+            bool hasParams = false;
+            
+            if (!string.IsNullOrEmpty(vaultIdsParam))
+            {
+                url += $"?vaultIds={Uri.EscapeDataString(vaultIdsParam)}";
+                hasParams = true;
+            }
+            
+            if (!string.IsNullOrEmpty(midpointIdsParam))
+            {
+                url += hasParams ? "&" : "?";
+                url += $"midpointIds={Uri.EscapeDataString(midpointIdsParam)}";
+            }
+
+            // Call the batch download endpoint
+            var response = await Http.GetAsync(url);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var zipBytes = await response.Content.ReadAsByteArrayAsync();
+                
+                // Generate filename based on number of selected items
+                int totalItems = selectedVaultIds.Count + selectedMidpointIds.Count;
+                string fileName = totalItems == 1 
+                    ? "Selected_Photos.zip" 
+                    : $"Selected_Photos_{totalItems}_Items.zip";
+
+                await JS.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(zipBytes));
+                await JS.InvokeVoidAsync("alert", $"Successfully downloaded photos from {totalItems} item(s) in a single ZIP file.");
+                
+                // Clear selections after successful download
+                await ClearAllSelections();
+            }
+            else
+            {
+                var errorMessage = await response.Content.ReadAsStringAsync();
+                await JS.InvokeVoidAsync("alert", $"Failed to download photos: {errorMessage}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error downloading selected photos: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Error downloading photos: {ex.Message}");
+        }
+        finally
+        {
+            isDownloadingSelected = false;
+            StateHasChanged();
         }
     }
 
@@ -2569,6 +2835,7 @@ else
                 string coordinates = $"{midpoint.Location.Y:F6}, {midpoint.Location.X:F6}";
                 string editButtonId = $"editMidpoint_{midpointId}";
                 string photosHtml = BuildPhotosHtml(midpointId, midpointPhotos, "midpoint");
+                
                 string popup = $"<div style='font-size: 12px; line-height: 1.6; width: 300px;'>" +
                     $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(midpoint.Name)}<br>" +
                     photosHtml +
@@ -2583,12 +2850,13 @@ else
 
                 // Get the updated color (API should have updated it based on status)
                 string midpointColor = !string.IsNullOrWhiteSpace(midpoint.Color) ? midpoint.Color : GetMidpointStatusColor(midpoint.Status);
+                bool isSelected = selectedMidpointIds.Contains(midpointId);
                 
                 // Remove the old marker
                 await module.InvokeVoidAsync("removeLayer", mapInstance, mapLayers[$"midpoint_{midpointId}"]);
                 
                 // Create a new marker with updated color and popup
-                var newMarkerRef = await module.InvokeAsync<IJSObjectReference>("addCircle", mapInstance, midpoint.Location.Y, midpoint.Location.X, midpointColor, popup, midpoint.Id, dotNetReference);
+                var newMarkerRef = await module.InvokeAsync<IJSObjectReference>("addCircle", mapInstance, midpoint.Location.Y, midpoint.Location.X, midpointColor, popup, midpoint.Id, dotNetReference, isSelected);
                 mapLayers[$"midpoint_{midpointId}"] = newMarkerRef;
                 
                 // Attach edit button handler
@@ -2910,7 +3178,8 @@ else
                                     $"</div>" +
                                     $"</div>";
                                 string midpointColor = !string.IsNullOrWhiteSpace(midpoint.Color) ? midpoint.Color : GetMidpointStatusColor(midpoint.Status);
-                                var circleRef = await module.InvokeAsync<IJSObjectReference>("addCircle", mapInstance, midpoint.Location.Y, midpoint.Location.X, midpointColor, popup, midpoint.Id, dotNetReference);
+                                bool isSelected = selectedMidpointIds.Contains(midpoint.Id);
+                                var circleRef = await module.InvokeAsync<IJSObjectReference>("addCircle", mapInstance, midpoint.Location.Y, midpoint.Location.X, midpointColor, popup, midpoint.Id, dotNetReference, isSelected);
                                 mapLayers[$"midpoint_{midpoint.Id}"] = circleRef;
                                 await module.InvokeVoidAsync("attachEditButtonHandler", circleRef, editButtonId, "midpoint", midpoint.Id, dotNetReference);
                             }

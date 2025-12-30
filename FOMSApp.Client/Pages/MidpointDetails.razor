@@ -528,12 +528,11 @@ else
                 // Get the ZIP file as a byte array
                 var zipBytes = await response.Content.ReadAsByteArrayAsync();
                 
-                // Get the filename from the Content-Disposition header, or use a default
-                string fileName = "Midpoint_Photos.zip";
-                if (response.Content.Headers.ContentDisposition != null)
-                {
-                    fileName = response.Content.Headers.ContentDisposition.FileName?.Trim('"') ?? fileName;
-                }
+                // Construct filename using the midpoint name
+                // Sanitize the midpoint name to remove invalid filename characters
+                string midpointName = midpoint?.Name ?? $"Midpoint_{Id}";
+                string safeMidpointName = string.Join("_", midpointName.Split(System.IO.Path.GetInvalidFileNameChars()));
+                string fileName = $"{safeMidpointName}_Photos.zip";
 
                 // Use JavaScript to trigger the download
                 await JS.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(zipBytes));
