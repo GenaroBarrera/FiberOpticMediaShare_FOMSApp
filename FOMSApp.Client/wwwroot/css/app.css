@@ -146,7 +146,6 @@ code {
     /* Calculate height: viewport height minus header, toolbar (now includes search bar on same line), and padding */
     /* Account for: h1 (~50px), toolbar with search (~60px), padding (~30px) */
     /* Alerts are now positioned absolutely and don't affect height calculation */
-    /* Bottom margin matches left padding (px-4 = 1.5rem) */
     height: calc(100vh - 200px);
     min-height: 500px; /* Ensure minimum usable height */
     /* Prevent the map from resizing when content above changes */
@@ -156,6 +155,9 @@ code {
     overflow: hidden; /* Prevent content overflow */
     /* Bottom margin matches left padding (px-4 = 1.5rem) */
     margin-bottom: 1.5rem;
+    /* Left and right margins are inherited from article padding, no additional margin needed */
+    margin-left: 0;
+    margin-right: 0;
 }
 
 /* Search bar container styling */
@@ -168,10 +170,12 @@ code {
 /* On larger screens, extend to fill available space */
 @media (min-width: 641px) {
     .map-container {
-        /* Extend right margin to match left offset: article has 2rem left, 1.5rem right */
-        /* Use negative margin to compensate and align with left */
-        margin-right: -0.5rem; /* Makes effective right offset = 1.5rem + 0.5rem = 2rem to match left */
-        /* Bottom margin matches left padding (2rem) */
+        /* Article has padding-left: 2rem and padding-right: 1.5rem */
+        /* To make all margins equal (2rem), we need to add margin-right to match left */
+        /* Left visual margin = article padding-left = 2rem */
+        /* Right visual margin = article padding-right (1.5rem) + map margin-right (0.5rem) = 2rem */
+        margin-right: 0.5rem; /* Adds 0.5rem to article's 1.5rem padding = 2rem total right margin */
+        /* Bottom margin matches other margins (2rem) */
         margin-bottom: 2rem;
         /* Maintain consistent height calculation to fill available space */
         height: calc(100vh - 200px);
