@@ -50,6 +50,13 @@ else
                         @onclick="async () => await SetMode(MapMode.Delete)">
                     Delete
                 </button>
+                <button type="button" 
+                        class="btn btn-outline-secondary"
+                        @onclick="async () => await UndoLastAction()"
+                        disabled="@(undoHistory.Count == 0)"
+                        title="@(undoHistory.Count > 0 ? $"Undo last action ({undoHistory.Count} available)" : "No actions to undo")">
+                    ↶ Undo
+                </button>
             </div>
         </div>
 
@@ -383,6 +390,49 @@ else
     /// Used to allow JavaScript to call back into C# methods (e.g., for delete functionality).
     /// </summary>
     private DotNetObjectReference<Home>? dotNetReference;
+
+    /// <summary>
+    /// Enumeration of action types that can be undone.
+    /// </summary>
+    private enum UndoActionType
+    {
+        Delete,
+        Edit,
+        Move
+    }
+
+    /// <summary>
+    /// Represents a single undo history entry containing the action type, entity information, and previous state.
+    /// </summary>
+    private class UndoHistoryEntry
+    {
+        /// <summary>
+        /// The type of action performed (Delete, Edit, or Move).
+        /// </summary>
+        public UndoActionType ActionType { get; set; }
+
+        /// <summary>
+        /// The type of entity affected ("vault", "midpoint", or "cable").
+        /// </summary>
+        public string EntityType { get; set; } = string.Empty;
+
+        /// <summary>
+        /// The unique ID of the entity that was affected.
+        /// </summary>
+        public int EntityId { get; set; }
+
+        /// <summary>
+        /// Serialized JSON representation of the entity's state before the action.
+        /// Used to restore the entity to its previous state when undoing.
+        /// </summary>
+        public string PreviousStateJson { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// Stack of undo history entries. The most recent action is at the top of the stack.
+    /// Limited to 50 entries to prevent excessive memory usage.
+    /// </summary>
+    private Stack<UndoHistoryEntry> undoHistory = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -1186,110 +1236,239 @@ else
 
     /// <summary>
     /// Deletes a vault from the database and removes it from the map.
+    /// Also adds the deletion to the undo history so it can be undone.
     /// </summary>
     /// <param name="vaultId">The unique ID of the vault to delete</param>
     private async Task DeleteVault(int vaultId)
     {
         if (module == null || mapInstance == null) return;
 
-        // Call API to delete the vault
-        var response = await Http.DeleteAsync($"api/vaults/{vaultId}");
-
-        if (response.IsSuccessStatusCode)
+        try
         {
-            // Remove from map
-            var layerKey = $"vault_{vaultId}";
-            if (mapLayers.ContainsKey(layerKey))
+            // Get the vault before deleting to store in undo history
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            options.Converters.Add(new GeoJsonConverterFactory());
+            var vaultToDelete = await Http.GetFromJsonAsync<Vault>($"api/vaults/{vaultId}", options);
+
+            if (vaultToDelete == null)
             {
-                await module.InvokeVoidAsync("removeLayer", mapInstance, mapLayers[layerKey]);
-                mapLayers.Remove(layerKey);
+                await JS.InvokeVoidAsync("alert", "Vault not found.");
+                return;
             }
 
-            // Refresh the vaults list
-            await LoadVaults();
-            
-            // Refresh the map display
-            StateHasChanged();
+            // Serialize the vault state for undo history
+            string vaultJson = JsonSerializer.Serialize(vaultToDelete, options);
+
+            // Call API to delete the vault
+            var response = await Http.DeleteAsync($"api/vaults/{vaultId}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Add to undo history
+                undoHistory.Push(new UndoHistoryEntry
+                {
+                    ActionType = UndoActionType.Delete,
+                    EntityType = "vault",
+                    EntityId = vaultId,
+                    PreviousStateJson = vaultJson
+                });
+
+                // Limit history to 50 entries
+                if (undoHistory.Count > 50)
+                {
+                    var tempStack = new Stack<UndoHistoryEntry>();
+                    for (int i = 0; i < 50; i++)
+                    {
+                        tempStack.Push(undoHistory.Pop());
+                    }
+                    undoHistory = tempStack;
+                }
+
+                // Remove from map
+                var layerKey = $"vault_{vaultId}";
+                if (mapLayers.ContainsKey(layerKey))
+                {
+                    await module.InvokeVoidAsync("removeLayer", mapInstance, mapLayers[layerKey]);
+                    mapLayers.Remove(layerKey);
+                }
+
+                // Refresh the vaults list
+                await LoadVaults();
+                
+                // Refresh the map display
+                StateHasChanged();
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", "Failed to delete vault. Please try again.");
+            }
         }
-        else
+        catch (Exception ex)
         {
-            await JS.InvokeVoidAsync("alert", "Failed to delete vault. Please try again.");
+            Console.WriteLine($"Error deleting vault: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Failed to delete vault. Error: {ex.Message}");
         }
     }
 
     /// <summary>
     /// Deletes a midpoint from the database and removes it from the map.
+    /// Also adds the deletion to the undo history so it can be undone.
     /// </summary>
     /// <param name="midpointId">The unique ID of the midpoint to delete</param>
     private async Task DeleteMidpoint(int midpointId)
     {
         if (module == null || mapInstance == null) return;
 
-        // Call API to delete the midpoint
-        var response = await Http.DeleteAsync($"api/midpoints/{midpointId}");
-
-        if (response.IsSuccessStatusCode)
+        try
         {
-            // Remove from map
-            var layerKey = $"midpoint_{midpointId}";
-            if (mapLayers.ContainsKey(layerKey))
+            // Get the midpoint before deleting to store in undo history
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            options.Converters.Add(new GeoJsonConverterFactory());
+            var midpointToDelete = await Http.GetFromJsonAsync<Midpoint>($"api/midpoints/{midpointId}", options);
+
+            if (midpointToDelete == null)
             {
-                await module.InvokeVoidAsync("removeLayer", mapInstance, mapLayers[layerKey]);
-                mapLayers.Remove(layerKey);
+                await JS.InvokeVoidAsync("alert", "Midpoint not found.");
+                return;
             }
 
-            // Refresh the midpoints list
-            await LoadMidpoints();
-            
-            // Refresh the map display
-            StateHasChanged();
+            // Serialize the midpoint state for undo history
+            string midpointJson = JsonSerializer.Serialize(midpointToDelete, options);
+
+            // Call API to delete the midpoint
+            var response = await Http.DeleteAsync($"api/midpoints/{midpointId}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Add to undo history
+                undoHistory.Push(new UndoHistoryEntry
+                {
+                    ActionType = UndoActionType.Delete,
+                    EntityType = "midpoint",
+                    EntityId = midpointId,
+                    PreviousStateJson = midpointJson
+                });
+
+                // Limit history to 50 entries
+                if (undoHistory.Count > 50)
+                {
+                    var tempStack = new Stack<UndoHistoryEntry>();
+                    for (int i = 0; i < 50; i++)
+                    {
+                        tempStack.Push(undoHistory.Pop());
+                    }
+                    undoHistory = tempStack;
+                }
+
+                // Remove from map
+                var layerKey = $"midpoint_{midpointId}";
+                if (mapLayers.ContainsKey(layerKey))
+                {
+                    await module.InvokeVoidAsync("removeLayer", mapInstance, mapLayers[layerKey]);
+                    mapLayers.Remove(layerKey);
+                }
+
+                // Refresh the midpoints list
+                await LoadMidpoints();
+                
+                // Refresh the map display
+                StateHasChanged();
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", "Failed to delete midpoint. Please try again.");
+            }
         }
-        else
+        catch (Exception ex)
         {
-            await JS.InvokeVoidAsync("alert", "Failed to delete midpoint. Please try again.");
+            Console.WriteLine($"Error deleting midpoint: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Failed to delete midpoint. Error: {ex.Message}");
         }
     }
 
     /// <summary>
     /// Deletes a cable from the database and removes it from the map, including all vertex markers.
+    /// Also adds the deletion to the undo history so it can be undone.
     /// </summary>
     /// <param name="cableId">The unique ID of the cable to delete</param>
     private async Task DeleteCable(int cableId)
     {
         if (module == null || mapInstance == null) return;
 
-        // Call API to delete the cable
-        var response = await Http.DeleteAsync($"api/cables/{cableId}");
-
-        if (response.IsSuccessStatusCode)
+        try
         {
-            // Remove polyline from map
-            var layerKey = $"cable_{cableId}";
-            if (mapLayers.ContainsKey(layerKey))
+            // Get the cable before deleting to store in undo history
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            options.Converters.Add(new GeoJsonConverterFactory());
+            var cableToDelete = await Http.GetFromJsonAsync<Cable>($"api/cables/{cableId}", options);
+
+            if (cableToDelete == null)
             {
-                await module.InvokeVoidAsync("removeLayer", mapInstance, mapLayers[layerKey]);
-                mapLayers.Remove(layerKey);
+                await JS.InvokeVoidAsync("alert", "Cable not found.");
+                return;
             }
-            
-            // Remove all vertex markers for this cable
-            if (cableVertexMarkers.ContainsKey(cableId))
+
+            // Serialize the cable state for undo history
+            string cableJson = JsonSerializer.Serialize(cableToDelete, options);
+
+            // Call API to delete the cable
+            var response = await Http.DeleteAsync($"api/cables/{cableId}");
+
+            if (response.IsSuccessStatusCode)
             {
-                foreach (var vertexMarker in cableVertexMarkers[cableId])
+                // Add to undo history
+                undoHistory.Push(new UndoHistoryEntry
                 {
-                    await module.InvokeVoidAsync("removeLayer", mapInstance, vertexMarker);
-                }
-                cableVertexMarkers.Remove(cableId);
-            }
+                    ActionType = UndoActionType.Delete,
+                    EntityType = "cable",
+                    EntityId = cableId,
+                    PreviousStateJson = cableJson
+                });
 
-            // Refresh the cables list
-            await LoadCables();
-            
-            // Refresh the map display
-            StateHasChanged();
+                // Limit history to 50 entries
+                if (undoHistory.Count > 50)
+                {
+                    var tempStack = new Stack<UndoHistoryEntry>();
+                    for (int i = 0; i < 50; i++)
+                    {
+                        tempStack.Push(undoHistory.Pop());
+                    }
+                    undoHistory = tempStack;
+                }
+
+                // Remove polyline from map
+                var layerKey = $"cable_{cableId}";
+                if (mapLayers.ContainsKey(layerKey))
+                {
+                    await module.InvokeVoidAsync("removeLayer", mapInstance, mapLayers[layerKey]);
+                    mapLayers.Remove(layerKey);
+                }
+                
+                // Remove all vertex markers for this cable
+                if (cableVertexMarkers.ContainsKey(cableId))
+                {
+                    foreach (var vertexMarker in cableVertexMarkers[cableId])
+                    {
+                        await module.InvokeVoidAsync("removeLayer", mapInstance, vertexMarker);
+                    }
+                    cableVertexMarkers.Remove(cableId);
+                }
+
+                // Refresh the cables list
+                await LoadCables();
+                
+                // Refresh the map display
+                StateHasChanged();
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", "Failed to delete cable. Please try again.");
+            }
         }
-        else
+        catch (Exception ex)
         {
-            await JS.InvokeVoidAsync("alert", "Failed to delete cable. Please try again.");
+            Console.WriteLine($"Error deleting cable: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Failed to delete cable. Error: {ex.Message}");
         }
     }
 
@@ -1334,6 +1513,7 @@ else
 
     /// <summary>
     /// Updates a vault's location after it has been dragged to a new position on the map.
+    /// Also adds the move to the undo history so it can be undone.
     /// </summary>
     /// <param name="vaultId">The unique ID of the vault to update</param>
     /// <param name="newLat">The new latitude coordinate</param>
@@ -1344,7 +1524,7 @@ else
 
         try
         {
-            // First, get the current vault to preserve other properties
+            // First, get the current vault to preserve other properties and store previous state for undo
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             options.Converters.Add(new GeoJsonConverterFactory());
             
@@ -1354,6 +1534,9 @@ else
                 await JS.InvokeVoidAsync("alert", "Vault not found.");
                 return;
             }
+
+            // Store previous state for undo history
+            string previousStateJson = JsonSerializer.Serialize(vault, options);
 
             // Create a new Point with the new coordinates (X=Longitude, Y=Latitude)
             var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
@@ -1375,6 +1558,26 @@ else
 
             if (response.IsSuccessStatusCode)
             {
+                // Add to undo history
+                undoHistory.Push(new UndoHistoryEntry
+                {
+                    ActionType = UndoActionType.Move,
+                    EntityType = "vault",
+                    EntityId = vaultId,
+                    PreviousStateJson = previousStateJson
+                });
+
+                // Limit history to 50 entries
+                if (undoHistory.Count > 50)
+                {
+                    var tempStack = new Stack<UndoHistoryEntry>();
+                    for (int i = 0; i < 50; i++)
+                    {
+                        tempStack.Push(undoHistory.Pop());
+                    }
+                    undoHistory = tempStack;
+                }
+
                 // Load photos for this vault
                 List<Photo>? vaultPhotos = null;
                 try
@@ -1432,6 +1635,7 @@ else
 
     /// <summary>
     /// Updates a midpoint's location after it has been dragged to a new position on the map.
+    /// Also adds the move to the undo history so it can be undone.
     /// </summary>
     /// <param name="midpointId">The unique ID of the midpoint to update</param>
     /// <param name="newLat">The new latitude coordinate</param>
@@ -1442,7 +1646,7 @@ else
 
         try
         {
-            // First, get the current midpoint to preserve other properties
+            // First, get the current midpoint to preserve other properties and store previous state for undo
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             options.Converters.Add(new GeoJsonConverterFactory());
             
@@ -1452,6 +1656,9 @@ else
                 await JS.InvokeVoidAsync("alert", "Midpoint not found.");
                 return;
             }
+
+            // Store previous state for undo history
+            string previousStateJson = JsonSerializer.Serialize(midpoint, options);
 
             // Create a new Point with the new coordinates (X=Longitude, Y=Latitude)
             var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
@@ -1473,6 +1680,26 @@ else
 
             if (response.IsSuccessStatusCode)
             {
+                // Add to undo history
+                undoHistory.Push(new UndoHistoryEntry
+                {
+                    ActionType = UndoActionType.Move,
+                    EntityType = "midpoint",
+                    EntityId = midpointId,
+                    PreviousStateJson = previousStateJson
+                });
+
+                // Limit history to 50 entries
+                if (undoHistory.Count > 50)
+                {
+                    var tempStack = new Stack<UndoHistoryEntry>();
+                    for (int i = 0; i < 50; i++)
+                    {
+                        tempStack.Push(undoHistory.Pop());
+                    }
+                    undoHistory = tempStack;
+                }
+
                 // Load photos for this midpoint
                 List<Photo>? midpointPhotos = null;
                 try
@@ -1802,12 +2029,15 @@ else
     {
         try
         {
-            // Get the current cable
+            // Get the current cable and store previous state for undo
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             options.Converters.Add(new GeoJsonConverterFactory());
             
             var cable = await Http.GetFromJsonAsync<Cable>($"api/cables/{cableId}", options);
             if (cable == null || cable.Path == null) return;
+
+            // Store previous state for undo history
+            string previousStateJson = JsonSerializer.Serialize(cable, options);
 
             // Update the coordinate at the specified index
             var coordinates = cable.Path.Coordinates.ToList();
@@ -1827,6 +2057,26 @@ else
                 
                 if (response.IsSuccessStatusCode)
                 {
+                    // Add to undo history
+                    undoHistory.Push(new UndoHistoryEntry
+                    {
+                        ActionType = UndoActionType.Move,
+                        EntityType = "cable",
+                        EntityId = cableId,
+                        PreviousStateJson = previousStateJson
+                    });
+
+                    // Limit history to 50 entries
+                    if (undoHistory.Count > 50)
+                    {
+                        var tempStack = new Stack<UndoHistoryEntry>();
+                        for (int i = 0; i < 50; i++)
+                        {
+                            tempStack.Push(undoHistory.Pop());
+                        }
+                        undoHistory = tempStack;
+                    }
+
                     // Reload the specific cable and redraw it with updated vertices
                     var updatedCable = await Http.GetFromJsonAsync<Cable>($"api/cables/{cableId}", options);
                     if (updatedCable != null)
@@ -1926,12 +2176,15 @@ else
     {
         try
         {
-            // Get the current cable
+            // Get the current cable and store previous state for undo
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             options.Converters.Add(new GeoJsonConverterFactory());
             
             var cable = await Http.GetFromJsonAsync<Cable>($"api/cables/{cableId}", options);
             if (cable == null || cable.Path == null) return;
+
+            // Store previous state for undo history
+            string previousStateJson = JsonSerializer.Serialize(cable, options);
 
             // Update all coordinates by the delta
             var coordinates = cable.Path.Coordinates.Select(c => 
@@ -1949,6 +2202,26 @@ else
             
             if (response.IsSuccessStatusCode)
             {
+                // Add to undo history
+                undoHistory.Push(new UndoHistoryEntry
+                {
+                    ActionType = UndoActionType.Move,
+                    EntityType = "cable",
+                    EntityId = cableId,
+                    PreviousStateJson = previousStateJson
+                });
+
+                // Limit history to 50 entries
+                if (undoHistory.Count > 50)
+                {
+                    var tempStack = new Stack<UndoHistoryEntry>();
+                    for (int i = 0; i < 50; i++)
+                    {
+                        tempStack.Push(undoHistory.Pop());
+                    }
+                    undoHistory = tempStack;
+                }
+
                 // Reload the cable and redraw it
                 await LoadCables();
                 StateHasChanged();
@@ -2049,9 +2322,7 @@ else
 
     /// <summary>
     /// Saves vault changes from the modal and updates the map popup.
-    /// </summary>
-    /// <summary>
-    /// Saves vault changes from the modal and updates the map popup.
+    /// Also adds the edit to the undo history so it can be undone.
     /// </summary>
     private async Task SaveVaultFromModal()
     {
@@ -2066,9 +2337,12 @@ else
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             options.Converters.Add(new GeoJsonConverterFactory());
 
-            // Get the current vault to preserve Location
+            // Get the current vault to preserve Location and store previous state for undo
             var currentVault = await Http.GetFromJsonAsync<Vault>($"api/vaults/{editingVaultModel.Id}", options);
             if (currentVault == null) return;
+
+            // Store previous state for undo history
+            string previousStateJson = JsonSerializer.Serialize(currentVault, options);
 
             // Update vault properties
             currentVault.Name = editingVaultModel.Name;
@@ -2080,6 +2354,26 @@ else
 
             if (response.IsSuccessStatusCode)
             {
+                // Add to undo history
+                undoHistory.Push(new UndoHistoryEntry
+                {
+                    ActionType = UndoActionType.Edit,
+                    EntityType = "vault",
+                    EntityId = editingVaultModel.Id,
+                    PreviousStateJson = previousStateJson
+                });
+
+                // Limit history to 50 entries
+                if (undoHistory.Count > 50)
+                {
+                    var tempStack = new Stack<UndoHistoryEntry>();
+                    for (int i = 0; i < 50; i++)
+                    {
+                        tempStack.Push(undoHistory.Pop());
+                    }
+                    undoHistory = tempStack;
+                }
+
                 // Reload vaults to get updated data
                 await LoadVaults();
 
@@ -2108,9 +2402,7 @@ else
 
     /// <summary>
     /// Saves midpoint changes from the modal and updates the map popup.
-    /// </summary>
-    /// <summary>
-    /// Saves midpoint changes from the modal and updates the map popup.
+    /// Also adds the edit to the undo history so it can be undone.
     /// </summary>
     private async Task SaveMidpointFromModal()
     {
@@ -2125,9 +2417,12 @@ else
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             options.Converters.Add(new GeoJsonConverterFactory());
 
-            // Get the current midpoint to preserve Location
+            // Get the current midpoint to preserve Location and store previous state for undo
             var currentMidpoint = await Http.GetFromJsonAsync<Midpoint>($"api/midpoints/{editingMidpointModel.Id}", options);
             if (currentMidpoint == null) return;
+
+            // Store previous state for undo history
+            string previousStateJson = JsonSerializer.Serialize(currentMidpoint, options);
 
             // Update midpoint properties
             currentMidpoint.Name = editingMidpointModel.Name;
@@ -2139,6 +2434,26 @@ else
 
             if (response.IsSuccessStatusCode)
             {
+                // Add to undo history
+                undoHistory.Push(new UndoHistoryEntry
+                {
+                    ActionType = UndoActionType.Edit,
+                    EntityType = "midpoint",
+                    EntityId = editingMidpointModel.Id,
+                    PreviousStateJson = previousStateJson
+                });
+
+                // Limit history to 50 entries
+                if (undoHistory.Count > 50)
+                {
+                    var tempStack = new Stack<UndoHistoryEntry>();
+                    for (int i = 0; i < 50; i++)
+                    {
+                        tempStack.Push(undoHistory.Pop());
+                    }
+                    undoHistory = tempStack;
+                }
+
                 // Reload midpoints to get updated data
                 await LoadMidpoints();
 
@@ -2310,6 +2625,7 @@ else
 
     /// <summary>
     /// Saves cable changes from the modal and updates the map popup and polyline color.
+    /// Also adds the edit to the undo history so it can be undone.
     /// </summary>
     private async Task SaveCableFromModal()
     {
@@ -2324,9 +2640,12 @@ else
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             options.Converters.Add(new GeoJsonConverterFactory());
 
-            // Get the current cable to preserve Path
+            // Get the current cable to preserve Path and store previous state for undo
             var currentCable = await Http.GetFromJsonAsync<Cable>($"api/cables/{editingCableModel.Id}", options);
             if (currentCable == null) return;
+
+            // Store previous state for undo history
+            string previousStateJson = JsonSerializer.Serialize(currentCable, options);
 
             // Update cable properties
             currentCable.Name = editingCableModel.Name;
@@ -2338,6 +2657,26 @@ else
 
             if (response.IsSuccessStatusCode)
             {
+                // Add to undo history
+                undoHistory.Push(new UndoHistoryEntry
+                {
+                    ActionType = UndoActionType.Edit,
+                    EntityType = "cable",
+                    EntityId = editingCableModel.Id,
+                    PreviousStateJson = previousStateJson
+                });
+
+                // Limit history to 50 entries
+                if (undoHistory.Count > 50)
+                {
+                    var tempStack = new Stack<UndoHistoryEntry>();
+                    for (int i = 0; i < 50; i++)
+                    {
+                        tempStack.Push(undoHistory.Pop());
+                    }
+                    undoHistory = tempStack;
+                }
+
                 // Reload cables to get updated data
                 await LoadCables();
 
@@ -2448,6 +2787,210 @@ else
         public string Name { get; set; } = string.Empty;
         public string? Description { get; set; }
         public string Color { get; set; } = "Black";
+    }
+
+    /// <summary>
+    /// Undoes the last action performed (delete, edit, or move) by restoring the previous state.
+    /// </summary>
+    private async Task UndoLastAction()
+    {
+        if (undoHistory.Count == 0 || module == null || mapInstance == null)
+            return;
+
+        try
+        {
+            // Pop the last action from the history stack
+            var lastAction = undoHistory.Pop();
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            options.Converters.Add(new GeoJsonConverterFactory());
+
+            // Deserialize the previous state
+            object? previousEntity = null;
+            string entityType = lastAction.EntityType.ToLower();
+
+            switch (entityType)
+            {
+                case "vault":
+                    previousEntity = JsonSerializer.Deserialize<Vault>(lastAction.PreviousStateJson, options);
+                    break;
+                case "midpoint":
+                    previousEntity = JsonSerializer.Deserialize<Midpoint>(lastAction.PreviousStateJson, options);
+                    break;
+                case "cable":
+                    previousEntity = JsonSerializer.Deserialize<Cable>(lastAction.PreviousStateJson, options);
+                    break;
+            }
+
+            if (previousEntity == null)
+            {
+                await JS.InvokeVoidAsync("alert", "Failed to restore previous state. Invalid data.");
+                return;
+            }
+
+            // Restore based on action type
+            switch (lastAction.ActionType)
+            {
+                case UndoActionType.Delete:
+                    // Restore deleted entity by creating it again
+                    if (previousEntity is Vault vault)
+                    {
+                        var vaultResponse = await Http.PostAsJsonAsync("api/vaults", vault, options);
+                        if (vaultResponse.IsSuccessStatusCode)
+                        {
+                            await LoadVaults();
+                            // Re-add vault to map using the same logic as OnAfterRenderAsync
+                            if (vault.Location != null)
+                            {
+                                List<Photo>? vaultPhotos = null;
+                                try
+                                {
+                                    vaultPhotos = await Http.GetFromJsonAsync<List<Photo>>($"api/photos/vault/{vault.Id}");
+                                }
+                                catch { }
+
+                                string descriptionText = string.IsNullOrWhiteSpace(vault.Description) 
+                                    ? "No description provided." 
+                                    : System.Net.WebUtility.HtmlEncode(vault.Description);
+                                string coordinates = $"{vault.Location.Y:F6}, {vault.Location.X:F6}";
+                                string editButtonId = $"editVault_{vault.Id}";
+                                string photosHtml = BuildPhotosHtml(vault.Id, vaultPhotos, "vault");
+                                string popup = $"<div style='font-size: 12px; line-height: 1.6; width: 300px;'>" +
+                                    $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(vault.Name)}<br>" +
+                                    photosHtml +
+                                    $"<strong>Status:</strong> {vault.Status}<br>" +
+                                    $"<strong>Description:</strong> {descriptionText}<br>" +
+                                    $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
+                                    $"<div style='margin-top: 8px;'>" +
+                                    $"<button id='{editButtonId}' class='btn btn-sm btn-primary me-2' style='font-size: 11px; padding: 2px 8px;'>Edit</button>" +
+                                    $"<a href='vault/{vault.Id}' style='font-size: 11px;'>View Details</a>" +
+                                    $"</div>" +
+                                    $"</div>";
+                                string vaultColor = !string.IsNullOrWhiteSpace(vault.Color) ? vault.Color : GetStatusColor(vault.Status);
+                                var markerRef = await module.InvokeAsync<IJSObjectReference>("addMarker", mapInstance, vault.Location.Y, vault.Location.X, popup, vault.Id, dotNetReference, vaultColor);
+                                mapLayers[$"vault_{vault.Id}"] = markerRef;
+                                await module.InvokeVoidAsync("attachEditButtonHandler", markerRef, editButtonId, "vault", vault.Id, dotNetReference);
+                            }
+                        }
+                        else
+                        {
+                            await JS.InvokeVoidAsync("alert", "Failed to restore vault.");
+                        }
+                    }
+                    else if (previousEntity is Midpoint midpoint)
+                    {
+                        var midpointResponse = await Http.PostAsJsonAsync("api/midpoints", midpoint, options);
+                        if (midpointResponse.IsSuccessStatusCode)
+                        {
+                            await LoadMidpoints();
+                            // Re-add midpoint to map using the same logic as OnAfterRenderAsync
+                            if (midpoint.Location != null)
+                            {
+                                List<Photo>? midpointPhotos = null;
+                                try
+                                {
+                                    midpointPhotos = await Http.GetFromJsonAsync<List<Photo>>($"api/photos/midpoint/{midpoint.Id}");
+                                }
+                                catch { }
+
+                                string descriptionText = string.IsNullOrWhiteSpace(midpoint.Description) 
+                                    ? "No description provided." 
+                                    : System.Net.WebUtility.HtmlEncode(midpoint.Description);
+                                string coordinates = $"{midpoint.Location.Y:F6}, {midpoint.Location.X:F6}";
+                                string editButtonId = $"editMidpoint_{midpoint.Id}";
+                                string photosHtml = BuildPhotosHtml(midpoint.Id, midpointPhotos, "midpoint");
+                                string popup = $"<div style='font-size: 12px; line-height: 1.6; width: 300px;'>" +
+                                    $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(midpoint.Name)}<br>" +
+                                    photosHtml +
+                                    $"<strong>Status:</strong> {midpoint.Status}<br>" +
+                                    $"<strong>Description:</strong> {descriptionText}<br>" +
+                                    $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
+                                    $"<div style='margin-top: 8px;'>" +
+                                    $"<button id='{editButtonId}' class='btn btn-sm btn-primary me-2' style='font-size: 11px; padding: 2px 8px;'>Edit</button>" +
+                                    $"<a href='midpoint/{midpoint.Id}' style='font-size: 11px;'>View Details</a>" +
+                                    $"</div>" +
+                                    $"</div>";
+                                string midpointColor = !string.IsNullOrWhiteSpace(midpoint.Color) ? midpoint.Color : GetMidpointStatusColor(midpoint.Status);
+                                var circleRef = await module.InvokeAsync<IJSObjectReference>("addCircle", mapInstance, midpoint.Location.Y, midpoint.Location.X, midpointColor, popup, midpoint.Id, dotNetReference);
+                                mapLayers[$"midpoint_{midpoint.Id}"] = circleRef;
+                                await module.InvokeVoidAsync("attachEditButtonHandler", circleRef, editButtonId, "midpoint", midpoint.Id, dotNetReference);
+                            }
+                        }
+                        else
+                        {
+                            await JS.InvokeVoidAsync("alert", "Failed to restore midpoint.");
+                        }
+                    }
+                    else if (previousEntity is Cable cable)
+                    {
+                        var cableResponse = await Http.PostAsJsonAsync("api/cables", cable, options);
+                        if (cableResponse.IsSuccessStatusCode)
+                        {
+                            await LoadCables();
+                            // Re-add cable to map
+                            if (cable.Path != null)
+                            {
+                                await DrawCableWithVertices(cable);
+                            }
+                        }
+                        else
+                        {
+                            await JS.InvokeVoidAsync("alert", "Failed to restore cable.");
+                        }
+                    }
+                    break;
+
+                case UndoActionType.Edit:
+                case UndoActionType.Move:
+                    // Restore previous state by updating the entity
+                    if (previousEntity is Vault vaultToRestore)
+                    {
+                        var vaultPutResponse = await Http.PutAsJsonAsync($"api/vaults/{vaultToRestore.Id}", vaultToRestore, options);
+                        if (vaultPutResponse.IsSuccessStatusCode)
+                        {
+                            await LoadVaults();
+                            await UpdateVaultPopup(vaultToRestore.Id);
+                        }
+                        else
+                        {
+                            await JS.InvokeVoidAsync("alert", "Failed to restore vault state.");
+                        }
+                    }
+                    else if (previousEntity is Midpoint midpointToRestore)
+                    {
+                        var midpointPutResponse = await Http.PutAsJsonAsync($"api/midpoints/{midpointToRestore.Id}", midpointToRestore, options);
+                        if (midpointPutResponse.IsSuccessStatusCode)
+                        {
+                            await LoadMidpoints();
+                            await UpdateMidpointPopup(midpointToRestore.Id);
+                        }
+                        else
+                        {
+                            await JS.InvokeVoidAsync("alert", "Failed to restore midpoint state.");
+                        }
+                    }
+                    else if (previousEntity is Cable cableToRestore)
+                    {
+                        var cablePutResponse = await Http.PutAsJsonAsync($"api/cables/{cableToRestore.Id}", cableToRestore, options);
+                        if (cablePutResponse.IsSuccessStatusCode)
+                        {
+                            await LoadCables();
+                            await UpdateCablePopup(cableToRestore.Id);
+                        }
+                        else
+                        {
+                            await JS.InvokeVoidAsync("alert", "Failed to restore cable state.");
+                        }
+                    }
+                    break;
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error undoing action: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Failed to undo action. Error: {ex.Message}");
+        }
     }
 
     /// <summary>
