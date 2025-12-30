@@ -685,3 +685,69 @@ export function makeVertexDraggable(map, vertexMarker, cableId, vertexIndex, pol
     
     return draggableMarker;
 }
+
+// Global function to download a file from base64 data with folder selection
+// This needs to be in the global scope so it can be called from C# via JSInterop
+// Uses File System Access API when available to let user choose save location
+window.downloadFile = async function(fileName, base64Data) {
+    try {
+        // Convert base64 string to binary data
+        var binaryString = atob(base64Data);
+        var bytes = new Uint8Array(binaryString.length);
+        for (var i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        
+        // Create a Blob from the binary data
+        var blob = new Blob([bytes], { type: 'application/zip' });
+        
+        // Check if File System Access API is supported (Chrome, Edge, etc.)
+        if ('showSaveFilePicker' in window) {
+            try {
+                // Use File System Access API to show a file picker
+                var fileHandle = await window.showSaveFilePicker({
+                    suggestedName: fileName,
+                    types: [{
+                        description: 'ZIP files',
+                        accept: {
+                            'application/zip': ['.zip']
+                        }
+                    }]
+                });
+                
+                // Write the file to the selected location
+                var writable = await fileHandle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+                
+                return; // Success - file saved to user-selected location
+            } catch (error) {
+                // User cancelled the file picker, or an error occurred
+                if (error.name === 'AbortError') {
+                    // User cancelled - this is fine, just return silently
+                    return;
+                }
+                // If File System Access API fails, fall back to default download
+                console.warn('File System Access API failed, falling back to default download:', error);
+            }
+        }
+        
+        // Fallback: Use traditional download method (default download folder)
+        // This works in all browsers but doesn't allow folder selection
+        var url = window.URL.createObjectURL(blob);
+        
+        // Create a temporary anchor element and trigger download
+        var link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        
+        // Clean up: remove the link and revoke the URL
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+    } catch (error) {
+        console.error('Error downloading file:', error);
+        alert('Failed to download file. Please try again.');
+    }
+};

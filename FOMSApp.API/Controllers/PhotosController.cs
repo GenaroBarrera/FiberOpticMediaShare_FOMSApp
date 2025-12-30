@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using FOMSApp.API.Data;
 using FOMSApp.Shared.Models;
+using System.IO.Compression;
 
 namespace FOMSApp.API.Controllers
 {
@@ -178,6 +179,140 @@ namespace FOMSApp.API.Controllers
 
             // Return the created Photo record (includes the auto-generated ID)
             return Ok(photo);
+        }
+
+        /// <summary>
+        /// Downloads all photos for a specific vault as a ZIP file.
+        /// </summary>
+        /// <param name="vaultId">The unique ID of the vault whose photos should be downloaded</param>
+        /// <returns>
+        /// HTTP 200 OK with a ZIP file containing all photos, or HTTP 404 Not Found if the vault has no photos.
+        /// </returns>
+        /// <remarks>
+        /// This endpoint creates a ZIP archive containing all photos associated with the vault.
+        /// The ZIP file is created in memory and streamed directly to the client.
+        /// Photos are named using their original filename or a sequential number if the original name is not available.
+        /// </remarks>
+        // GET: api/photos/vault/5/download
+        [HttpGet("vault/{vaultId}/download")]
+        public async Task<IActionResult> DownloadVaultPhotos(int vaultId)
+        {
+            // Get all photos for this vault
+            var photos = await _context.Photos
+                .Where(p => p.VaultId == vaultId)
+                .ToListAsync();
+
+            if (photos == null || photos.Count == 0)
+            {
+                return NotFound("No photos found for this vault.");
+            }
+
+            // Get the vault name for the ZIP filename
+            var vault = await _context.Vaults.FindAsync(vaultId);
+            string vaultName = vault?.Name ?? $"Vault_{vaultId}";
+            // Sanitize the vault name for use in filename (remove invalid characters)
+            string safeVaultName = string.Join("_", vaultName.Split(Path.GetInvalidFileNameChars()));
+
+            // Create a memory stream for the ZIP file
+            using var memoryStream = new MemoryStream();
+            
+            // Create a ZIP archive in the memory stream
+            using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, true))
+            {
+                foreach (var photo in photos)
+                {
+                    string filePath = Path.Combine(_env.WebRootPath, "uploads", photo.FileName);
+                    
+                    // Only add files that actually exist on disk
+                    if (System.IO.File.Exists(filePath))
+                    {
+                        // Create an entry in the ZIP archive
+                        // Use the photo's ID and original extension, or a sequential number
+                        string entryName = $"{photo.Id}_{photo.FileName}";
+                        var entry = archive.CreateEntry(entryName);
+                        
+                        // Copy the file content into the ZIP entry
+                        using (var entryStream = entry.Open())
+                        using (var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+                        {
+                            await fileStream.CopyToAsync(entryStream);
+                        }
+                    }
+                }
+            }
+
+            // Reset the stream position to the beginning
+            memoryStream.Position = 0;
+
+            // Return the ZIP file with appropriate headers
+            return File(memoryStream.ToArray(), "application/zip", $"{safeVaultName}_Photos.zip");
+        }
+
+        /// <summary>
+        /// Downloads all photos for a specific midpoint as a ZIP file.
+        /// </summary>
+        /// <param name="midpointId">The unique ID of the midpoint whose photos should be downloaded</param>
+        /// <returns>
+        /// HTTP 200 OK with a ZIP file containing all photos, or HTTP 404 Not Found if the midpoint has no photos.
+        /// </returns>
+        /// <remarks>
+        /// This endpoint creates a ZIP archive containing all photos associated with the midpoint.
+        /// The ZIP file is created in memory and streamed directly to the client.
+        /// Photos are named using their original filename or a sequential number if the original name is not available.
+        /// </remarks>
+        // GET: api/photos/midpoint/5/download
+        [HttpGet("midpoint/{midpointId}/download")]
+        public async Task<IActionResult> DownloadMidpointPhotos(int midpointId)
+        {
+            // Get all photos for this midpoint
+            var photos = await _context.Photos
+                .Where(p => p.MidpointId == midpointId)
+                .ToListAsync();
+
+            if (photos == null || photos.Count == 0)
+            {
+                return NotFound("No photos found for this midpoint.");
+            }
+
+            // Get the midpoint name for the ZIP filename
+            var midpoint = await _context.Midpoints.FindAsync(midpointId);
+            string midpointName = midpoint?.Name ?? $"Midpoint_{midpointId}";
+            // Sanitize the midpoint name for use in filename (remove invalid characters)
+            string safeMidpointName = string.Join("_", midpointName.Split(Path.GetInvalidFileNameChars()));
+
+            // Create a memory stream for the ZIP file
+            using var memoryStream = new MemoryStream();
+            
+            // Create a ZIP archive in the memory stream
+            using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, true))
+            {
+                foreach (var photo in photos)
+                {
+                    string filePath = Path.Combine(_env.WebRootPath, "uploads", photo.FileName);
+                    
+                    // Only add files that actually exist on disk
+                    if (System.IO.File.Exists(filePath))
+                    {
+                        // Create an entry in the ZIP archive
+                        // Use the photo's ID and original extension, or a sequential number
+                        string entryName = $"{photo.Id}_{photo.FileName}";
+                        var entry = archive.CreateEntry(entryName);
+                        
+                        // Copy the file content into the ZIP entry
+                        using (var entryStream = entry.Open())
+                        using (var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+                        {
+                            await fileStream.CopyToAsync(entryStream);
+                        }
+                    }
+                }
+            }
+
+            // Reset the stream position to the beginning
+            memoryStream.Position = 0;
+
+            // Return the ZIP file with appropriate headers
+            return File(memoryStream.ToArray(), "application/zip", $"{safeMidpointName}_Photos.zip");
         }
 
         /// <summary>

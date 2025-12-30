@@ -119,8 +119,26 @@ else
     </div>
 
     <div class="card">
-        <div class="card-header">
-            <h4>Photos</h4>
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h4 class="mb-0">Photos</h4>
+            @if (photos != null && photos.Count > 0)
+            {
+                <button type="button" 
+                        class="btn btn-success btn-sm" 
+                        @onclick="DownloadAllPhotos"
+                        disabled="@isDownloading"
+                        title="Download all photos as a ZIP file">
+                    @if (isDownloading)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        <text>Downloading...</text>
+                    }
+                    else
+                    {
+                        <text>⬇ Download All</text>
+                    }
+                </button>
+            }
         </div>
         <div class="card-body">
 
@@ -246,6 +264,12 @@ else
     /// Used to disable the upload button and show a loading spinner during upload.
     /// </summary>
     private bool isUploading = false;
+
+    /// <summary>
+    /// Indicates whether a photo download is currently in progress.
+    /// Used to disable the download button and show a loading spinner during download.
+    /// </summary>
+    private bool isDownloading = false;
 
     private void OpenPhoto(string fileName) // Opens the photo in a larger view
     {
@@ -478,6 +502,62 @@ else
         finally
         {
             isUploading = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Downloads all photos for this vault as a ZIP file.
+    /// </summary>
+    private async Task DownloadAllPhotos()
+    {
+        if (photos == null || photos.Count == 0)
+        {
+            await JS.InvokeVoidAsync("alert", "No photos to download.");
+            return;
+        }
+
+        isDownloading = true;
+        StateHasChanged();
+
+        try
+        {
+            // Call the API endpoint to download all photos as a ZIP file
+            var response = await Http.GetAsync($"api/photos/vault/{Id}/download");
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Get the ZIP file as a byte array
+                var zipBytes = await response.Content.ReadAsByteArrayAsync();
+                
+                // Get the filename from the Content-Disposition header, or use a default
+                string fileName = "Vault_Photos.zip";
+                if (response.Content.Headers.ContentDisposition != null)
+                {
+                    fileName = response.Content.Headers.ContentDisposition.FileName?.Trim('"') ?? fileName;
+                }
+
+                // Use JavaScript to trigger the download
+                await JS.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(zipBytes));
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                await JS.InvokeVoidAsync("alert", "No photos found to download.");
+            }
+            else
+            {
+                var errorMessage = await response.Content.ReadAsStringAsync();
+                await JS.InvokeVoidAsync("alert", $"Failed to download photos: {errorMessage}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error downloading photos: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Error downloading photos: {ex.Message}");
+        }
+        finally
+        {
+            isDownloading = false;
             StateHasChanged();
         }
     }
