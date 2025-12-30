@@ -417,23 +417,37 @@ else
                 {
                     if (vault.Location != null)
                     {
-                        // Build popup content with labeled fields: Name, Status, Description, Coordinates, and link to details
+                        // Load photos for this vault
+                        List<Photo>? vaultPhotos = null;
+                        try
+                        {
+                            vaultPhotos = await Http.GetFromJsonAsync<List<Photo>>($"api/photos/vault/{vault.Id}");
+                        }
+                        catch
+                        {
+                            // If photos fail to load, continue without them
+                        }
+
+                        // Build popup content with labeled fields: Name, Photos (if any), Status, Description, Coordinates, and link to details
                         string descriptionText = string.IsNullOrWhiteSpace(vault.Description) 
                             ? "No description provided." 
                             : System.Net.WebUtility.HtmlEncode(vault.Description);
                         string coordinates = $"{vault.Location.Y:F6}, {vault.Location.X:F6}";
                         // Create a unique ID for the edit button to avoid conflicts
                         string editButtonId = $"editVault_{vault.Id}";
-                string popup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
-                    $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(vault.Name)}<br>" +
-                    $"<strong>Status:</strong> {vault.Status}<br>" +
-                    $"<strong>Description:</strong> {descriptionText}<br>" +
-                    $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
-                    $"<div style='margin-top: 8px;'>" +
-                    $"<button id='{editButtonId}' class='btn btn-sm btn-primary me-2' style='font-size: 11px; padding: 2px 8px;'>Edit</button>" +
-                    $"<a href='vault/{vault.Id}' style='font-size: 11px;'>View Details</a>" +
-                    $"</div>" +
-                    $"</div>";
+                        string photosHtml = BuildPhotosHtml(vault.Id, vaultPhotos, "vault");
+                        
+                        string popup = $"<div style='font-size: 12px; line-height: 1.6; width: 300px;'>" +
+                            $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(vault.Name)}<br>" +
+                            photosHtml +
+                            $"<strong>Status:</strong> {vault.Status}<br>" +
+                            $"<strong>Description:</strong> {descriptionText}<br>" +
+                            $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
+                            $"<div style='margin-top: 8px;'>" +
+                            $"<button id='{editButtonId}' class='btn btn-sm btn-primary me-2' style='font-size: 11px; padding: 2px 8px;'>Edit</button>" +
+                            $"<a href='vault/{vault.Id}' style='font-size: 11px;'>View Details</a>" +
+                            $"</div>" +
+                            $"</div>";
                         // Ensure we have a valid color (use status-based color if Color is not set)
                         string vaultColor = !string.IsNullOrWhiteSpace(vault.Color) ? vault.Color : GetStatusColor(vault.Status);
                         // Pass the vault's Color property to display the marker in the correct status color
@@ -450,23 +464,37 @@ else
                 {
                     if (mp.Location != null)
                     {
-                        // Build popup content with labeled fields: Name, Status, Description, Coordinates, and link to details
+                        // Load photos for this midpoint
+                        List<Photo>? midpointPhotos = null;
+                        try
+                        {
+                            midpointPhotos = await Http.GetFromJsonAsync<List<Photo>>($"api/photos/midpoint/{mp.Id}");
+                        }
+                        catch
+                        {
+                            // If photos fail to load, continue without them
+                        }
+
+                        // Build popup content with labeled fields: Name, Photos (if any), Status, Description, Coordinates, and link to details
                         string descriptionText = string.IsNullOrWhiteSpace(mp.Description) 
                             ? "No description provided." 
                             : System.Net.WebUtility.HtmlEncode(mp.Description);
                         string coordinates = $"{mp.Location.Y:F6}, {mp.Location.X:F6}";
                         // Create a unique ID for the edit button to avoid conflicts
                         string editButtonId = $"editMidpoint_{mp.Id}";
-                string popup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
-                    $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(mp.Name)}<br>" +
-                    $"<strong>Status:</strong> {mp.Status}<br>" +
-                    $"<strong>Description:</strong> {descriptionText}<br>" +
-                    $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
-                    $"<div style='margin-top: 8px;'>" +
-                    $"<button id='{editButtonId}' class='btn btn-sm btn-primary me-2' style='font-size: 11px; padding: 2px 8px;'>Edit</button>" +
-                    $"<a href='midpoint/{mp.Id}' style='font-size: 11px;'>View Details</a>" +
-                    $"</div>" +
-                    $"</div>";
+                        string photosHtml = BuildPhotosHtml(mp.Id, midpointPhotos, "midpoint");
+                        
+                        string popup = $"<div style='font-size: 12px; line-height: 1.6; width: 300px;'>" +
+                            $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(mp.Name)}<br>" +
+                            photosHtml +
+                            $"<strong>Status:</strong> {mp.Status}<br>" +
+                            $"<strong>Description:</strong> {descriptionText}<br>" +
+                            $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
+                            $"<div style='margin-top: 8px;'>" +
+                            $"<button id='{editButtonId}' class='btn btn-sm btn-primary me-2' style='font-size: 11px; padding: 2px 8px;'>Edit</button>" +
+                            $"<a href='midpoint/{mp.Id}' style='font-size: 11px;'>View Details</a>" +
+                            $"</div>" +
+                            $"</div>";
                         // Ensure we have a valid color (use status-based color if Color is not set)
                         string midpointColor = !string.IsNullOrWhiteSpace(mp.Color) ? mp.Color : GetMidpointStatusColor(mp.Status);
                         // Pass the midpoint's Color property to display the marker in the correct status color
@@ -742,22 +770,42 @@ else
             
             if (createdVault != null && createdVault.Location != null && dotNetReference != null)
             {
+                // Load photos for this vault (likely empty for new vaults, but check anyway)
+                List<Photo>? vaultPhotos = null;
+                try
+                {
+                    vaultPhotos = await Http.GetFromJsonAsync<List<Photo>>($"api/photos/vault/{createdVault.Id}");
+                }
+                catch
+                {
+                    // If photos fail to load, continue without them
+                }
+
                 // Add marker to map immediately and store reference for deletion
-                // Build popup content with labeled fields: Name, Status, Description, Coordinates, and link to details
+                // Build popup content with labeled fields: Name, Photos (if any), Status, Description, Coordinates, Edit button, and link to details
                 string descriptionText = string.IsNullOrWhiteSpace(createdVault.Description) 
                     ? "No description provided." 
                     : System.Net.WebUtility.HtmlEncode(createdVault.Description);
                 string coordinates = $"{createdVault.Location.Y:F6}, {createdVault.Location.X:F6}";
-                string popup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
+                string editButtonId = $"editVault_{createdVault.Id}";
+                string photosHtml = BuildPhotosHtml(createdVault.Id, vaultPhotos, "vault");
+                string popup = $"<div style='font-size: 12px; line-height: 1.6; width: 300px;'>" +
                     $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(createdVault.Name)}<br>" +
+                    photosHtml +
                     $"<strong>Status:</strong> {createdVault.Status}<br>" +
                     $"<strong>Description:</strong> {descriptionText}<br>" +
                     $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
-                    $"<a href='vault/{createdVault.Id}' style='margin-top: 8px; display: inline-block;'>View Details</a>" +
+                    $"<div style='margin-top: 8px;'>" +
+                    $"<button id='{editButtonId}' class='btn btn-sm btn-primary me-2' style='font-size: 11px; padding: 2px 8px;'>Edit</button>" +
+                    $"<a href='vault/{createdVault.Id}' style='font-size: 11px;'>View Details</a>" +
+                    $"</div>" +
                     $"</div>";
                 // Pass the vault's Color property to display the marker in the correct status color
                 var markerRef = await module.InvokeAsync<IJSObjectReference>("addMarker", mapInstance, createdVault.Location.Y, createdVault.Location.X, popup, createdVault.Id, dotNetReference, createdVault.Color);
                 mapLayers[$"vault_{createdVault.Id}"] = markerRef;
+                
+                // Attach edit button handler
+                await module.InvokeVoidAsync("attachEditButtonHandler", markerRef, editButtonId, "vault", createdVault.Id, dotNetReference);
 
                 // Refresh the vaults list
                 await LoadVaults();
@@ -808,15 +856,28 @@ else
             
             if (createdMidpoint != null && createdMidpoint.Location != null && dotNetReference != null)
             {
+                // Load photos for this midpoint (likely empty for new midpoints, but check anyway)
+                List<Photo>? midpointPhotos = null;
+                try
+                {
+                    midpointPhotos = await Http.GetFromJsonAsync<List<Photo>>($"api/photos/midpoint/{createdMidpoint.Id}");
+                }
+                catch
+                {
+                    // If photos fail to load, continue without them
+                }
+
                 // Add circle to map immediately and store reference for deletion
-                // Build popup content with labeled fields: Name, Status, Description, Coordinates, Edit button, and link to details
+                // Build popup content with labeled fields: Name, Photos (if any), Status, Description, Coordinates, Edit button, and link to details
                 string descriptionText = string.IsNullOrWhiteSpace(createdMidpoint.Description) 
                     ? "No description provided." 
                     : System.Net.WebUtility.HtmlEncode(createdMidpoint.Description);
                 string coordinates = $"{createdMidpoint.Location.Y:F6}, {createdMidpoint.Location.X:F6}";
                 string editButtonId = $"editMidpoint_{createdMidpoint.Id}";
-                string popup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
+                string photosHtml = BuildPhotosHtml(createdMidpoint.Id, midpointPhotos, "midpoint");
+                string popup = $"<div style='font-size: 12px; line-height: 1.6; width: 300px;'>" +
                     $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(createdMidpoint.Name)}<br>" +
+                    photosHtml +
                     $"<strong>Status:</strong> {createdMidpoint.Status}<br>" +
                     $"<strong>Description:</strong> {descriptionText}<br>" +
                     $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
@@ -1308,14 +1369,27 @@ else
 
             if (response.IsSuccessStatusCode)
             {
+                // Load photos for this vault
+                List<Photo>? vaultPhotos = null;
+                try
+                {
+                    vaultPhotos = await Http.GetFromJsonAsync<List<Photo>>($"api/photos/vault/{vaultId}");
+                }
+                catch
+                {
+                    // If photos fail to load, continue without them
+                }
+
                 // Update the popup with new coordinates
                 string descriptionText = string.IsNullOrWhiteSpace(updatedVault.Description) 
                     ? "No description provided." 
                     : System.Net.WebUtility.HtmlEncode(updatedVault.Description);
                 string coordinates = $"{newLat:F6}, {newLng:F6}";
                 string editButtonId = $"editVault_{vaultId}";
-                string newPopup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
+                string photosHtml = BuildPhotosHtml(vaultId, vaultPhotos, "vault");
+                string newPopup = $"<div style='font-size: 12px; line-height: 1.6; width: 300px;'>" +
                     $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(updatedVault.Name)}<br>" +
+                    photosHtml +
                     $"<strong>Status:</strong> {updatedVault.Status}<br>" +
                     $"<strong>Description:</strong> {descriptionText}<br>" +
                     $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
@@ -1393,14 +1467,27 @@ else
 
             if (response.IsSuccessStatusCode)
             {
+                // Load photos for this midpoint
+                List<Photo>? midpointPhotos = null;
+                try
+                {
+                    midpointPhotos = await Http.GetFromJsonAsync<List<Photo>>($"api/photos/midpoint/{midpointId}");
+                }
+                catch
+                {
+                    // If photos fail to load, continue without them
+                }
+
                 // Update the popup with new coordinates
                 string descriptionText = string.IsNullOrWhiteSpace(updatedMidpoint.Description) 
                     ? "No description provided." 
                     : System.Net.WebUtility.HtmlEncode(updatedMidpoint.Description);
                 string coordinates = $"{newLat:F6}, {newLng:F6}";
                 string editButtonId = $"editMidpoint_{midpointId}";
-                string newPopup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
+                string photosHtml = BuildPhotosHtml(midpointId, midpointPhotos, "midpoint");
+                string newPopup = $"<div style='font-size: 12px; line-height: 1.6; width: 300px;'>" +
                     $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(updatedMidpoint.Name)}<br>" +
+                    photosHtml +
                     $"<strong>Status:</strong> {updatedMidpoint.Status}<br>" +
                     $"<strong>Description:</strong> {descriptionText}<br>" +
                     $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
@@ -2143,14 +2230,27 @@ else
 
             if (midpoint != null && midpoint.Location != null)
             {
+                // Load photos for this midpoint
+                List<Photo>? midpointPhotos = null;
+                try
+                {
+                    midpointPhotos = await Http.GetFromJsonAsync<List<Photo>>($"api/photos/midpoint/{midpointId}");
+                }
+                catch
+                {
+                    // If photos fail to load, continue without them
+                }
+
                 // Build updated popup content
                 string descriptionText = string.IsNullOrWhiteSpace(midpoint.Description) 
                     ? "No description provided." 
                     : System.Net.WebUtility.HtmlEncode(midpoint.Description);
                 string coordinates = $"{midpoint.Location.Y:F6}, {midpoint.Location.X:F6}";
                 string editButtonId = $"editMidpoint_{midpointId}";
-                string popup = $"<div style='font-size: 12px; line-height: 1.6;'>" +
+                string photosHtml = BuildPhotosHtml(midpointId, midpointPhotos, "midpoint");
+                string popup = $"<div style='font-size: 12px; line-height: 1.6; width: 300px;'>" +
                     $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(midpoint.Name)}<br>" +
+                    photosHtml +
                     $"<strong>Status:</strong> {midpoint.Status}<br>" +
                     $"<strong>Description:</strong> {descriptionText}<br>" +
                     $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
@@ -2286,6 +2386,51 @@ else
         {
             Console.WriteLine($"Error updating cable popup: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Builds HTML for photo thumbnails with navigation in popups.
+    /// </summary>
+    /// <param name="entityId">The ID of the entity (vault or midpoint)</param>
+    /// <param name="photos">List of photos for the entity</param>
+    /// <param name="entityType">Type of entity: "vault" or "midpoint"</param>
+    /// <returns>HTML string for photo thumbnails, or empty string if no photos</returns>
+    private string BuildPhotosHtml(int entityId, List<Photo>? photos, string entityType)
+    {
+        if (photos == null || photos.Count == 0)
+            return string.Empty;
+
+        string photoContainerId = $"photos_{entityType}_{entityId}";
+        string baseUrl = Http.BaseAddress?.ToString().TrimEnd('/') ?? "";
+        string firstPhotoUrl = $"{baseUrl}/uploads/{System.Net.WebUtility.HtmlEncode(photos[0].FileName)}";
+        
+        // Build navigation buttons HTML - use single quotes in onclick to avoid conflicts with outer string
+        string navButtons = "";
+        if (photos.Count > 1)
+        {
+            navButtons = $"<div style='background-color: #333; color: white; padding: 4px 8px; display: flex; justify-content: space-between; align-items: center; font-size: 10px;'>" +
+                $"<button id='prev_{photoContainerId}' onclick=\"navigatePhoto('{photoContainerId}', -1); return false;\" style='background: none; border: none; color: white; cursor: pointer; padding: 0 4px;'>&lt;</button>" +
+                $"<span id='photoCount_{photoContainerId}'>1 of {photos.Count}</span>" +
+                $"<button id='next_{photoContainerId}' onclick=\"navigatePhoto('{photoContainerId}', 1); return false;\" style='background: none; border: none; color: white; cursor: pointer; padding: 0 4px;'>&gt;</button>" +
+                $"</div>";
+        }
+        else
+        {
+            navButtons = $"<div style='background-color: #333; color: white; padding: 4px 8px; text-align: center; font-size: 10px;'>" +
+                $"<span>1 of 1</span>" +
+                $"</div>";
+        }
+
+        // Build data attribute with all photo file names (stored as-is, not HTML encoded since it's in a data attribute)
+        string photoUrls = string.Join(",", photos.Select(p => p.FileName ?? ""));
+        
+        // HTML encode the baseUrl for safety in the data attribute
+        string encodedBaseUrl = System.Net.WebUtility.HtmlEncode(baseUrl);
+        
+        return $"<div id='{photoContainerId}' style='margin: 8px 0;' data-photos='{System.Net.WebUtility.HtmlEncode(photoUrls)}' data-current='0' data-baseurl='{encodedBaseUrl}/uploads/'>" +
+            $"<img id='img_{photoContainerId}' src='{firstPhotoUrl}' style='width: 100%; max-width: 280px; height: auto; display: block; border: 1px solid #ddd;' alt='Photo 1 of {photos.Count}' />" +
+            navButtons +
+            $"</div>";
     }
 
     /// <summary>

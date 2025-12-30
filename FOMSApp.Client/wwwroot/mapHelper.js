@@ -386,6 +386,53 @@ export function navigateToLocation(map, lat, lng) {
     });
 }
 
+// Global function to handle photo navigation in popups
+// This needs to be in the global scope so it can be called from inline onclick handlers
+window.navigatePhoto = function(containerId, direction) {
+    var container = document.getElementById(containerId);
+    if (!container) return;
+    
+    var photosAttr = container.getAttribute('data-photos');
+    if (!photosAttr) return;
+    
+    // Decode HTML entities (file names are HTML encoded in the attribute)
+    var tempDiv = document.createElement('div');
+    tempDiv.innerHTML = photosAttr;
+    var decodedPhotos = tempDiv.textContent || tempDiv.innerText || photosAttr;
+    
+    // Split photos
+    var photos = decodedPhotos.split(',').filter(function(p) { return p.trim(); });
+    if (photos.length === 0) return;
+    
+    var current = parseInt(container.getAttribute('data-current')) || 0;
+    var baseUrlAttr = container.getAttribute('data-baseurl');
+    
+    // Decode baseUrl if it was HTML encoded
+    tempDiv.innerHTML = baseUrlAttr || '/uploads/';
+    var baseUrl = tempDiv.textContent || tempDiv.innerText || (baseUrlAttr || '/uploads/');
+    
+    // Update current index
+    current += direction;
+    if (current < 0) current = photos.length - 1;
+    if (current >= photos.length) current = 0;
+    
+    // Update image src
+    var img = document.getElementById('img_' + containerId);
+    if (img) {
+        img.src = baseUrl + photos[current].trim();
+        img.alt = 'Photo ' + (current + 1) + ' of ' + photos.length;
+    }
+    
+    // Update photo count display
+    var countSpan = document.getElementById('photoCount_' + containerId);
+    if (countSpan) {
+        countSpan.textContent = (current + 1) + ' of ' + photos.length;
+    }
+    
+    // Update data attribute
+    container.setAttribute('data-current', current);
+};
+
 // Function to invalidate the map size, forcing Leaflet to recalculate dimensions
 // This should be called after the container size changes (e.g., after DOM updates)
 export function invalidateMapSize(map) {
