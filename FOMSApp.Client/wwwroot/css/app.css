@@ -113,21 +113,49 @@ code {
     text-align: start;
 }
 
+/* Map wrapper - provides positioning context for alerts */
+.map-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+/* Map alerts container - positioned absolutely to not affect document flow */
+.map-alerts-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    z-index: 1000; /* Ensure alerts appear above map */
+    pointer-events: none; /* Allow clicks to pass through to map when no alerts */
+    /* Position alerts at the top of the map container area */
+    transform: translateY(0);
+}
+
+/* Make alert content interactive */
+.map-alerts-container .alert {
+    pointer-events: auto; /* Re-enable pointer events for alerts and buttons */
+    margin-bottom: 0.5rem; /* Spacing between multiple alerts */
+}
+
 /* Map container styling to fill available vertical space */
 .map-container {
     width: 100%;
-    /* Calculate height: viewport height minus header, toolbar (now includes search bar on same line), alerts, and padding */
-    /* Account for: h1 (~50px), toolbar with search (~60px), potential alerts (~100px), padding (~30px) */
-    height: calc(100vh - 240px);
+    /* Calculate height: viewport height minus header, toolbar (now includes search bar on same line), and padding */
+    /* Account for: h1 (~50px), toolbar with search (~60px), padding (~30px) */
+    /* Alerts are now positioned absolutely and don't affect height calculation */
+    /* Bottom margin matches left padding (px-4 = 1.5rem) */
+    height: calc(100vh - 200px);
     min-height: 500px; /* Ensure minimum usable height */
-    max-height: calc(100vh - 240px); /* Prevent expansion beyond calculated height */
-    /* Consistent bottom offset matching the left padding (px-4 = 1.5rem) */
-    margin-bottom: 1.5rem;
     /* Prevent the map from resizing when content above changes */
     flex-shrink: 0;
     /* Ensure the container maintains its size */
     box-sizing: border-box;
     overflow: hidden; /* Prevent content overflow */
+    /* Bottom margin matches left padding (px-4 = 1.5rem) */
+    margin-bottom: 1.5rem;
 }
 
 /* Search bar container styling */
@@ -137,17 +165,16 @@ code {
     align-items: flex-end;
 }
 
-/* On larger screens, match the 2rem left padding for bottom offset */
+/* On larger screens, extend to fill available space */
 @media (min-width: 641px) {
     .map-container {
-        /* Bottom margin matches the left padding offset (2rem) */
-        margin-bottom: 2rem;
         /* Extend right margin to match left offset: article has 2rem left, 1.5rem right */
         /* Use negative margin to compensate and align with left */
         margin-right: -0.5rem; /* Makes effective right offset = 1.5rem + 0.5rem = 2rem to match left */
-        /* Maintain consistent height calculation */
-        height: calc(100vh - 240px);
-        max-height: calc(100vh - 240px);
+        /* Bottom margin matches left padding (2rem) */
+        margin-bottom: 2rem;
+        /* Maintain consistent height calculation to fill available space */
+        height: calc(100vh - 200px);
     }
 }
 

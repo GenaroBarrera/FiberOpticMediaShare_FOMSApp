@@ -104,25 +104,31 @@ else
         </div>
     </div>
 
-    <!-- Status message for current mode -->
-    @if (currentMode != MapMode.View)
-    {
-        <div class="alert alert-info" role="alert">
-            @GetModeInstructions()
-        </div>
-    }
+    <!-- Map wrapper - contains alerts and map container for consistent positioning -->
+    <div class="map-wrapper">
+        <!-- Map alerts container - positioned absolutely to not affect map container layout -->
+        <div class="map-alerts-container">
+            <!-- Status message for current mode -->
+            @if (currentMode != MapMode.View)
+            {
+                <div class="alert alert-info" role="alert">
+                    @GetModeInstructions()
+                </div>
+            }
 
-    <!-- Cable drawing progress indicator -->
-    @if (currentMode == MapMode.DrawCable && cablePoints.Count > 0)
-    {
-        <div class="alert alert-warning" role="alert">
-            Cable drawing in progress: @cablePoints.Count point(s) added. Click "Finish Cable" to save or "Cancel" to start over.
-            <button type="button" class="btn btn-sm btn-success ms-2" @onclick="FinishCable">Finish Cable</button>
-            <button type="button" class="btn btn-sm btn-danger ms-2" @onclick="CancelCable">Cancel</button>
+            <!-- Cable drawing progress indicator -->
+            @if (currentMode == MapMode.DrawCable && cablePoints.Count > 0)
+            {
+                <div class="alert alert-warning" role="alert">
+                    Cable drawing in progress: @cablePoints.Count point(s) added. Click "Finish Cable" to save or "Cancel" to start over.
+                    <button type="button" class="btn btn-sm btn-success ms-2" @onclick="FinishCable">Finish Cable</button>
+                    <button type="button" class="btn btn-sm btn-danger ms-2" @onclick="CancelCable">Cancel</button>
+                </div>
+            }
         </div>
-    }
 
-    <div id="map" class="map-container @GetMapCursorClass()"></div>
+        <div id="map" class="map-container @GetMapCursorClass()"></div>
+    </div>
 
     <!-- Edit Modal for Vaults and Midpoints -->
     @if (editingEntity != null)
