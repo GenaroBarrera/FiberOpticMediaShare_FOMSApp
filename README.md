@@ -4,7 +4,7 @@ FOMSApp is a web-based construction management tool designed to optimize the Qua
 
 It solves the inefficiency of manual photo management by combining **Geospatial Visualization** with **Cloud Storage Automation**. Field crews upload photos directly to map-based infrastructure points, and project coordinators review them in real-time. Upon approval ("Green" status), data is automatically synced to the client's required external storage (Google Drive).
 
-## 🚀 Key Features
+## Key Features
 
 * **Interactive Construction Map:** Visualizes fiber routes (conduit) and infrastructure nodes (vaults) using Leaflet.js.
 * **Geospatial Data Management:** Uses **SQL Server Spatial (NetTopologySuite)** to store exact GPS coordinates of construction assets.
@@ -12,7 +12,7 @@ It solves the inefficiency of manual photo management by combining **Geospatial 
 * **High-Speed Uploads:** Decouples viewing from storage by uploading field photos to **Azure Blob Storage** for instant gallery loading.
 * **Automated Client Delivery:** Background services automatically sync approved photos to the Client's Google Drive, eliminating manual file transfer.
 
-## 🛠️ Tech Stack & Architecture
+## Tech Stack & Architecture
 
 This project is built using **Clean Architecture** principles within the .NET ecosystem.
 
@@ -25,14 +25,14 @@ This project is built using **Clean Architecture** principles within the .NET ec
 | **Storage** | Azure Blob Storage | High-performance "Hot" tier storage for image galleries |
 | **Background Jobs**| Hangfire / BackgroundService | Handling long-running sync tasks to Google Drive |
 
-## 🏗️ System Architecture
+## System Architecture
 
 1.  **Ingestion:** Engineering drawings (KML/GeoJSON) are parsed to populate the `Vaults` table.
 2.  **Field Ops:** Crews select a Vault on the map and upload photos via the Blazor Client -> Azure Blob.
 3.  **Review:** Coordinator accepts a vault.
 4.  **Sync:** The Backend triggers a job to stream the file from Azure -> Google Drive API.
 
-## 💻 Getting Started
+## Getting Started
 
 ### Prerequisites
 * [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
@@ -67,14 +67,12 @@ This project is built using **Clean Architecture** principles within the .NET ec
     dotnet run
     ```
 
-## 📸 Screenshots
+## Screenshots
 
 *(Placeholder: Add screenshots here of the Map View, Photo Upload Modal, and QA Dashboard)*
 
-## 🔮 Future Improvements (Roadmap)
-* **Mobile App:** Native MAUI wrapper for better offline support in remote areas.
-* **AI Analysis:** Computer Vision to auto-detect if a vault lid is open or closed.
-* **Push Notifications:** Alert field crews immediately when a photo is rejected.
+## Future Improvements (Roadmap)
 
-## 📄 License
+
+## License
 This project is licensed under the MIT License.
