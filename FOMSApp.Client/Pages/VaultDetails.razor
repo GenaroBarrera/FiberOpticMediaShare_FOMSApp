@@ -33,7 +33,6 @@ else
                     <p class="mb-0">
                         @{
                             var statusColor = GetStatusBadgeColor(vault?.Status ?? VaultStatus.New);
-                            // For custom badge-brown class, use it directly; for Bootstrap classes, use bg- prefix
                             var badgeClass = statusColor == "badge-brown" ? "badge badge-brown" : $"badge bg-{statusColor}";
                         }
                         <span class="@badgeClass">@vault?.Status</span>
@@ -215,7 +214,7 @@ else
         </div>
     </div>
 
-    @if (selectedPhotoUrl != null) // Show the zoomed-in photo
+    @if (selectedPhotoUrl != null)
     {
         <div class="modal-backdrop"
             style="background-color: rgba(0,0,0,0.9); position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1050; display: flex; justify-content: center; align-items: center;"
@@ -223,9 +222,7 @@ else
             <div style="position: relative; max-width: 90%; max-height: 90%;">
                 <img src="@selectedPhotoUrl"
                     style="max-width: 100%; max-height: 90vh; border: 2px solid white; box-shadow: 0 0 20px black;" />
-
-                <button class="btn btn-danger" style="position: absolute; top: -40px; right: 0;" @onclick="ClosePhoto">Close
-                    X</button>
+                <button class="btn btn-danger" style="position: absolute; top: -40px; right: 0;" @onclick="ClosePhoto">Close X</button>
             </div>
         </div>
     }
@@ -235,102 +232,35 @@ else
     [Parameter] public int Id { get; set; }
     private Vault? vault;
     private List<Photo>? photos;
-    private string? selectedPhotoUrl; // Holds the URL of the photo we want to zoom in on
+    private string? selectedPhotoUrl;
     
-    /// <summary>
-    /// Indicates whether the vault details are currently being edited.
-    /// When true, the UI switches from view mode to edit mode (form fields).
-    /// </summary>
     private bool isEditing = false;
-
-    /// <summary>
-    /// Indicates whether a vault update is currently in progress.
-    /// Used to disable the save button and show a loading spinner during save.
-    /// </summary>
     private bool isSaving = false;
-
-    /// <summary>
-    /// Temporary model used for editing vault properties.
-    /// This allows users to make changes without modifying the original vault object
-    /// until they click "Save Changes". If they cancel, the original values are preserved.
-    /// </summary>
     private VaultEditModel? editModel;
-
-    /// <summary>
-    /// Reference to the file input element. Used to reset it after successful upload
-    /// so users can upload multiple photos without page refresh.
-    /// </summary>
     private InputFile? fileInput;
-
-    /// <summary>
-    /// Stores the currently selected files before upload.
-    /// This allows users to browse and select multiple files, then upload them with a separate button.
-    /// </summary>
     private List<IBrowserFile> selectedFiles = new();
-
-    /// <summary>
-    /// Tracks the current upload progress when uploading multiple files.
-    /// Displays which file number is currently being uploaded (e.g., "2 of 5").
-    /// </summary>
     private int uploadProgress = 0;
-
-    /// <summary>
-    /// Indicates whether a photo upload is currently in progress.
-    /// Used to disable the upload button and show a loading spinner during upload.
-    /// </summary>
     private bool isUploading = false;
-
-    /// <summary>
-    /// Indicates whether a photo download is currently in progress.
-    /// Used to disable the download button and show a loading spinner during download.
-    /// </summary>
     private bool isDownloading = false;
 
-    private void OpenPhoto(string fileName) // Opens the photo in a larger view
-    {
-        selectedPhotoUrl = $"{Http.BaseAddress}uploads/{fileName}";
-    }
+    private void OpenPhoto(string fileName) => selectedPhotoUrl = $"{Http.BaseAddress}uploads/{fileName}";
+    private void ClosePhoto() => selectedPhotoUrl = null;
 
-    private void ClosePhoto() // Closes the larger view
+    // Maps status to Bootstrap badge color
+    private string GetStatusBadgeColor(VaultStatus status) => status switch
     {
-        selectedPhotoUrl = null;
-    }
+        VaultStatus.New => "primary",
+        VaultStatus.Pending => "badge-brown",
+        VaultStatus.Review => "secondary",
+        VaultStatus.Complete => "success",
+        VaultStatus.Issue => "danger",
+        _ => "secondary"
+    };
 
-    /// <summary>
-    /// Gets the Bootstrap badge color class based on the vault status.
-    /// Used to visually distinguish different statuses in the UI.
-    /// Maps status colors: New (blue), Pending (brown), Review (gray), Complete (green), Issue (red).
-    /// </summary>
-    /// <param name="status">The vault status to get the color for</param>
-    /// <returns>A Bootstrap color class name or custom CSS class for colors not in Bootstrap</returns>
-    private string GetStatusBadgeColor(VaultStatus status)
-    {
-        return status switch
-        {
-            VaultStatus.New => "primary",           // Blue
-            VaultStatus.Pending => "badge-brown",   // Brown (custom CSS class)
-            VaultStatus.Review => "secondary",      // Gray
-            VaultStatus.Complete => "success",      // Green
-            VaultStatus.Issue => "danger",          // Red
-            _ => "secondary"                        // Default to gray
-        };
-    }
-
-    /// <summary>
-    /// Switches the UI from view mode to edit mode.
-    /// Creates a copy of the current vault data for editing, allowing users to modify
-    /// properties without affecting the original until they save.
-    /// </summary>
-    /// <summary>
-    /// Switches the UI from view mode to edit mode.
-    /// Creates a copy of the current vault data for editing, allowing users to modify
-    /// properties without affecting the original until they save.
-    /// </summary>
     private void StartEditing()
     {
         if (vault == null) return;
 
-        // Create a copy of the vault data for editing
         editModel = new VaultEditModel
         {
             Id = vault.Id,
@@ -343,10 +273,6 @@ else
         StateHasChanged();
     }
 
-    /// <summary>
-    /// Cancels editing and returns to view mode without saving changes.
-    /// Discards any modifications made to the editModel.
-    /// </summary>
     private void CancelEditing()
     {
         isEditing = false;
@@ -354,51 +280,34 @@ else
         StateHasChanged();
     }
 
-    /// <summary>
-    /// Saves the edited vault properties to the server.
-    /// Called when the user submits the edit form (clicks "Save Changes").
-    /// </summary>
     private async Task SaveVault()
     {
-        if (editModel == null || vault == null)
-        {
-            return;
-        }
+        if (editModel == null || vault == null) return;
 
         isSaving = true;
         StateHasChanged();
 
         try
         {
-            // Create a Vault object with the updated properties
-            // Note: We preserve the Location property from the original vault
             var updatedVault = new Vault
             {
                 Id = editModel.Id,
                 Name = editModel.Name,
                 Status = editModel.Status,
                 Description = string.IsNullOrWhiteSpace(editModel.Description) ? null : editModel.Description,
-                Location = vault.Location // Preserve the original location
-                // Note: Color will be automatically set by the API based on Status
+                Location = vault.Location
             };
 
-            // Serialize with GeoJSON support for the Location property
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             options.Converters.Add(new GeoJsonConverterFactory());
 
-            // Send PUT request to update the vault
             var response = await Http.PutAsJsonAsync($"api/vaults/{editModel.Id}", updatedVault, options);
 
             if (response.IsSuccessStatusCode)
             {
-                // Reload the vault from the server to get the latest data
                 await LoadVault();
-                
-                // Exit edit mode
                 isEditing = false;
                 editModel = null;
-                
-                // Force UI update to reflect the changes
                 StateHasChanged();
             }
             else
@@ -435,29 +344,15 @@ else
 
     private async Task LoadPhotos()
     {
-        // Fetch the list of photos for this specific vault
         photos = await Http.GetFromJsonAsync<List<Photo>>($"api/photos/vault/{Id}");
     }
 
-    /// <summary>
-    /// Handles file selection when the user browses for files.
-    /// Stores the selected files but does not upload them yet.
-    /// Supports multiple file selection.
-    /// </summary>
-    /// <param name="e">Event arguments containing the selected files</param>
     private void OnFilesSelected(InputFileChangeEventArgs e)
     {
-        // Store all selected files for later upload (limit to 20 files at once to prevent issues)
         selectedFiles = e.GetMultipleFiles(maximumFileCount: 20).ToList();
-        
-        // Trigger UI update to show the selected file names
         StateHasChanged();
     }
 
-    /// <summary>
-    /// Clears the selected files without uploading them.
-    /// Allows users to cancel and select different files.
-    /// </summary>
     private void ClearSelectedFiles()
     {
         selectedFiles.Clear();
@@ -465,17 +360,9 @@ else
         StateHasChanged();
     }
 
-    /// <summary>
-    /// Uploads all previously selected photo files to the server.
-    /// This method is called when the user clicks the "Upload Photo(s)" button.
-    /// Files are uploaded sequentially to provide progress feedback.
-    /// </summary>
     private async Task UploadSelectedPhotos()
     {
-        if (selectedFiles.Count == 0)
-        {
-            return;
-        }
+        if (selectedFiles.Count == 0) return;
 
         isUploading = true;
         uploadProgress = 0;
@@ -494,31 +381,21 @@ else
 
                 try
                 {
-                    // Create a specialized "content" container for sending files
                     using var content = new MultipartFormDataContent();
-
-                    // We must resize/limit the file stream to prevent massive uploads crashing the browser
-                    // Allow up to 20MB (20 * 1024 * 1024 bytes) - reasonable for high-resolution construction photos
-                    // This limit prevents browser memory issues while allowing quality photos
                     var fileContent = new StreamContent(file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024));
                     fileContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
-
                     content.Add(content: fileContent, name: "file", fileName: file.Name);
                     content.Add(content: new StringContent(Id.ToString()), name: "vaultId");
 
-                    // Send to API
                     var response = await Http.PostAsync("api/photos", content);
 
                     if (response.IsSuccessStatusCode)
-                    {
                         successCount++;
-                    }
                     else
                     {
                         failCount++;
                         failedFiles.Add(file.Name);
-                        var errorMessage = await response.Content.ReadAsStringAsync();
-                        Console.WriteLine($"Upload failed for {file.Name}: {errorMessage}");
+                        Console.WriteLine($"Upload failed for {file.Name}");
                     }
                 }
                 catch (Exception ex)
@@ -529,18 +406,12 @@ else
                 }
             }
 
-            // Clear the selected files after all uploads are complete
             selectedFiles.Clear();
             uploadProgress = 0;
-            
-            // Refresh the list so the new photos appear instantly
             await LoadPhotos();
 
-            // Show summary message if there were any failures
             if (failCount > 0)
-            {
                 await JS.InvokeVoidAsync("alert", $"Upload complete: {successCount} succeeded, {failCount} failed.\nFailed files: {string.Join(", ", failedFiles)}");
-            }
         }
         catch (Exception ex)
         {
@@ -554,9 +425,6 @@ else
         }
     }
 
-    /// <summary>
-    /// Downloads all photos for this vault as a ZIP file.
-    /// </summary>
     private async Task DownloadAllPhotos()
     {
         if (photos == null || photos.Count == 0)
@@ -570,27 +438,17 @@ else
 
         try
         {
-            // Call the API endpoint to download all photos as a ZIP file
             var response = await Http.GetAsync($"api/photos/vault/{Id}/download");
 
             if (response.IsSuccessStatusCode)
             {
-                // Get the ZIP file as a byte array
                 var zipBytes = await response.Content.ReadAsByteArrayAsync();
-                
-                // Construct filename using the vault name
-                // Sanitize the vault name to remove invalid filename characters
                 string vaultName = vault?.Name ?? $"Vault_{Id}";
                 string safeVaultName = string.Join("_", vaultName.Split(System.IO.Path.GetInvalidFileNameChars()));
-                string fileName = $"{safeVaultName}_Photos.zip";
-
-                // Use JavaScript to trigger the download
-                await JS.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(zipBytes));
+                await JS.InvokeVoidAsync("downloadFile", $"{safeVaultName}_Photos.zip", Convert.ToBase64String(zipBytes));
             }
             else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-            {
                 await JS.InvokeVoidAsync("alert", "No photos found to download.");
-            }
             else
             {
                 var errorMessage = await response.Content.ReadAsStringAsync();
@@ -609,33 +467,18 @@ else
         }
     }
 
-    /// <summary>
-    /// Deletes a photo from the database and removes it from the display.
-    /// </summary>
-    /// <param name="photoId">The unique ID of the photo to delete</param>
     private async Task DeletePhoto(int photoId)
     {
-        // Show confirmation dialog
-        var confirmed = await JS.InvokeAsync<bool>("confirm", "Are you sure you want to delete this photo? This action cannot be undone.");
-        if (!confirmed)
-        {
-            return;
-        }
+        var confirmed = await JS.InvokeAsync<bool>("confirm", "Are you sure you want to delete this photo?");
+        if (!confirmed) return;
 
         try
         {
-            // Call API to delete the photo
             var response = await Http.DeleteAsync($"api/photos/{photoId}");
-
             if (response.IsSuccessStatusCode)
-            {
-                // Refresh the photos list to remove the deleted photo from the display
                 await LoadPhotos();
-            }
             else
-            {
-                await JS.InvokeAsync<string>("alert", "Failed to delete photo. Please try again.");
-            }
+                await JS.InvokeAsync<string>("alert", "Failed to delete photo.");
         }
         catch (Exception ex)
         {
@@ -644,32 +487,12 @@ else
         }
     }
 
-    /// <summary>
-    /// Data model used for editing vault properties in the form.
-    /// This is separate from the Vault model to allow validation and prevent
-    /// accidentally modifying properties that shouldn't be edited (like Location).
-    /// </summary>
+    // Edit model for vault form
     private class VaultEditModel
     {
-        /// <summary>
-        /// The unique identifier of the vault being edited.
-        /// </summary>
         public int Id { get; set; }
-
-        /// <summary>
-        /// The vault name. Required field for identification.
-        /// </summary>
         public string Name { get; set; } = string.Empty;
-
-        /// <summary>
-        /// The current workflow status of the vault.
-        /// </summary>
         public VaultStatus Status { get; set; }
-
-        /// <summary>
-        /// Optional description or notes about the vault.
-        /// Can be null or empty if no description is provided.
-        /// </summary>
         public string? Description { get; set; }
     }
 }

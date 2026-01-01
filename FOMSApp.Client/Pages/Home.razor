@@ -1,4 +1,4 @@
-﻿@page "/"
+@page "/"
 @using FOMSApp.Shared.Models
 @using Microsoft.JSInterop
 @using System.Text.Json
@@ -55,7 +55,7 @@ else
                         @onclick="async () => await UndoLastAction()"
                         disabled="@(undoHistory.Count == 0)"
                         title="@(undoHistory.Count > 0 ? $"Undo last action ({undoHistory.Count} available)" : "No actions to undo")">
-                    ↶ Undo
+                    ? Undo
                 </button>
                 <button type="button" 
                         class="btn @(currentMode == MapMode.Select ? "btn-primary" : "btn-outline-primary")"
@@ -74,7 +74,7 @@ else
                     }
                     else
                     {
-                        <text>📥 Download Selected (@(selectedVaultIds.Count + selectedMidpointIds.Count))</text>
+                        <text>?? Download Selected (@(selectedVaultIds.Count + selectedMidpointIds.Count))</text>
                     }
                 </button>
             </div>
@@ -89,11 +89,11 @@ else
                     title="@(isSatelliteView ? "Switch to default map" : "Switch to satellite view")">
                 @if (isSatelliteView)
                 {
-                    <text>🗺️ Map</text>
+                    <text>??? Map</text>
                 }
                 else
                 {
-                    <text>🛰️ Satellite</text>
+                    <text>??? Satellite</text>
                 }
             </button>
 
@@ -303,9 +303,7 @@ else
 @implements IDisposable
 
 @code {
-    /// <summary>
-    /// Enumeration defining the different interaction modes for the map editor.
-    /// </summary>
+    // Enumeration defining the different interaction modes for the map editor.
     private enum MapMode
     {
         View,           // Default mode - no editing, just viewing
@@ -323,114 +321,72 @@ else
     private IJSObjectReference? module;
     private IJSObjectReference? mapInstance;
     
-    /// <summary>
-    /// Current interaction mode for the map editor.
-    /// </summary>
+    // Current interaction mode for the map editor.
     private MapMode currentMode = MapMode.View;
 
-    /// <summary>
-    /// Search query entered by the user (address or coordinates).
-    /// </summary>
+    // Search query entered by the user (address or coordinates).
     private string searchQuery = string.Empty;
 
-    /// <summary>
-    /// Error message to display if search fails.
-    /// </summary>
+    // Error message to display if search fails.
     private string? searchError;
 
-    /// <summary>
-    /// Indicates whether a search operation is currently in progress.
-    /// Used to disable the search button and show a loading spinner during search.
-    /// </summary>
+    // Indicates whether a search operation is currently in progress.
+    // Used to disable the search button and show a loading spinner during search.
     private bool isSearching = false;
 
-    /// <summary>
-    /// Indicates whether the map is currently displaying satellite view (true) or default map view (false).
-    /// </summary>
+    // Indicates whether the map is currently displaying satellite view (true) or default map view (false).
     private bool isSatelliteView = false;
 
-    /// <summary>
-    /// Set of vault IDs that have been selected for batch operations (e.g., downloading photos).
-    /// </summary>
+    // Set of vault IDs that have been selected for batch operations (e.g., downloading photos).
     private HashSet<int> selectedVaultIds = new();
 
-    /// <summary>
-    /// Set of midpoint IDs that have been selected for batch operations (e.g., downloading photos).
-    /// </summary>
+    // Set of midpoint IDs that have been selected for batch operations (e.g., downloading photos).
     private HashSet<int> selectedMidpointIds = new();
 
-    /// <summary>
-    /// Indicates whether photos are currently being downloaded for selected entities.
-    /// Used to disable the download button and show a loading state during download.
-    /// </summary>
+    // Indicates whether photos are currently being downloaded for selected entities.
+    // Used to disable the download button and show a loading state during download.
     private bool isDownloadingSelected = false;
     
-    /// <summary>
-    /// Temporary storage for points collected while drawing a cable.
-    /// </summary>
+    // Temporary storage for points collected while drawing a cable.
     private List<(double Lat, double Lng)> cablePoints = new();
     
-    /// <summary>
-    /// Temporary polyline reference for previewing the cable being drawn.
-    /// </summary>
+    // Temporary polyline reference for previewing the cable being drawn.
     private IJSObjectReference? tempCablePolyline;
 
-    /// <summary>
-    /// Temporary markers for cable points while drawing (white circles).
-    /// </summary>
+    // Temporary markers for cable points while drawing (white circles).
     private List<IJSObjectReference> tempCableMarkers = new();
 
-    /// <summary>
-    /// Dictionary to store vertex markers for each cable (key: cableId, value: list of vertex markers).
-    /// </summary>
+    // Dictionary to store vertex markers for each cable (key: cableId, value: list of vertex markers).
     private Dictionary<int, List<IJSObjectReference>> cableVertexMarkers = new();
 
-    /// <summary>
-    /// ID of the currently selected cable (if any). Vertex markers are shown for the selected cable.
-    /// </summary>
+    // ID of the currently selected cable (if any). Vertex markers are shown for the selected cable.
     private int? selectedCableId = null;
 
-    /// <summary>
-    /// Information about the entity currently being edited in the modal (vault or midpoint).
-    /// </summary>
+    // Information about the entity currently being edited in the modal (vault or midpoint).
     private (string Type, int Id)? editingEntity = null;
 
-    /// <summary>
-    /// Edit model for vault editing in the modal.
-    /// </summary>
+    // Edit model for vault editing in the modal.
     private VaultEditModel? editingVaultModel = null;
 
-    /// <summary>
-    /// Edit model for midpoint editing in the modal.
-    /// </summary>
+    // Edit model for midpoint editing in the modal.
     private MidpointEditModel? editingMidpointModel = null;
 
-    /// <summary>
-    /// Edit model for cable editing in the modal.
-    /// </summary>
+    // Edit model for cable editing in the modal.
     private CableEditModel? editingCableModel = null;
 
-    /// <summary>
-    /// Indicates whether an entity save operation is in progress.
-    /// </summary>
+    // Indicates whether an entity save operation is in progress.
     private bool isSavingEntity = false;
 
-    /// <summary>
-    /// Dictionary to store map layer references (markers, circles, polylines) with their entity IDs.
-    /// Used to identify which item was clicked for deletion.
-    /// Key: Entity ID (vault/midpoint/cable ID), Value: JavaScript object reference to the Leaflet layer
-    /// </summary>
+    // Dictionary to store map layer references (markers, circles, polylines) with their entity IDs.
+    // Used to identify which item was clicked for deletion.
+    // Key: Entity ID (vault/midpoint/cable ID), Value: JavaScript object reference to the Leaflet layer
     private Dictionary<string, IJSObjectReference> mapLayers = new();
 
-    /// <summary>
-    /// .NET object reference for JavaScript interop callbacks.
-    /// Used to allow JavaScript to call back into C# methods (e.g., for delete functionality).
-    /// </summary>
+    // .NET object reference for JavaScript interop callbacks.
+    // Used to allow JavaScript to call back into C# methods (e.g., for delete functionality).
     private DotNetObjectReference<Home>? dotNetReference;
 
-    /// <summary>
-    /// Enumeration of action types that can be undone.
-    /// </summary>
+    // Enumeration of action types that can be undone.
     private enum UndoActionType
     {
         Delete,
@@ -438,37 +394,25 @@ else
         Move
     }
 
-    /// <summary>
-    /// Represents a single undo history entry containing the action type, entity information, and previous state.
-    /// </summary>
+    // Represents a single undo history entry containing the action type, entity information, and previous state.
     private class UndoHistoryEntry
     {
-        /// <summary>
-        /// The type of action performed (Delete, Edit, or Move).
-        /// </summary>
+        // The type of action performed (Delete, Edit, or Move).
         public UndoActionType ActionType { get; set; }
 
-        /// <summary>
-        /// The type of entity affected ("vault", "midpoint", or "cable").
-        /// </summary>
+        // The type of entity affected ("vault", "midpoint", or "cable").
         public string EntityType { get; set; } = string.Empty;
 
-        /// <summary>
-        /// The unique ID of the entity that was affected.
-        /// </summary>
+        // The unique ID of the entity that was affected.
         public int EntityId { get; set; }
 
-        /// <summary>
-        /// Serialized JSON representation of the entity's state before the action.
-        /// Used to restore the entity to its previous state when undoing.
-        /// </summary>
+        // Serialized JSON representation of the entity's state before the action.
+        // Used to restore the entity to its previous state when undoing.
         public string PreviousStateJson { get; set; } = string.Empty;
     }
 
-    /// <summary>
-    /// Stack of undo history entries. The most recent action is at the top of the stack.
-    /// Limited to 50 entries to prevent excessive memory usage.
-    /// </summary>
+    // Stack of undo history entries. The most recent action is at the top of the stack.
+    // Limited to 50 entries to prevent excessive memory usage.
     private Stack<UndoHistoryEntry> undoHistory = new();
 
     protected override async Task OnInitializedAsync()
@@ -628,9 +572,7 @@ else
         }
     }
 
-    /// <summary>
-    /// Sets up the click event listener on the map to handle user interactions based on the current mode.
-    /// </summary>
+    // Sets up the click event listener on the map to handle user interactions based on the current mode.
     private async Task SetupMapClickListener()
     {
         if (module != null && mapInstance != null)
@@ -641,12 +583,10 @@ else
         }
     }
 
-    /// <summary>
-    /// Handles clicks on map entities (vaults, midpoints, cables) when in Delete or Select mode.
-    /// This method is called from JavaScript when a user clicks on a marker, circle, or polyline.
-    /// </summary>
-    /// <param name="entityType">The type of entity clicked: "vault", "midpoint", or "cable"</param>
-    /// <param name="entityId">The unique ID of the entity</param>
+    // Handles clicks on map entities (vaults, midpoints, cables) when in Delete or Select mode.
+    // This method is called from JavaScript when a user clicks on a marker, circle, or polyline.
+    // <param name="entityType">The type of entity clicked: "vault", "midpoint", or "cable"</param>
+    // <param name="entityId">The unique ID of the entity</param>
     [JSInvokable]
     public async Task OnEntityClick(string entityType, int entityId)
     {
@@ -725,14 +665,12 @@ else
         }
     }
 
-    /// <summary>
-    /// Handles marker drag end events when a user moves a vault or midpoint marker to a new location.
-    /// This method is called from JavaScript when a marker is dragged and released.
-    /// </summary>
-    /// <param name="entityType">The type of entity moved: "vault" or "midpoint"</param>
-    /// <param name="entityId">The unique ID of the entity that was moved</param>
-    /// <param name="newLat">The new latitude coordinate after the drag</param>
-    /// <param name="newLng">The new longitude coordinate after the drag</param>
+    // Handles marker drag end events when a user moves a vault or midpoint marker to a new location.
+    // This method is called from JavaScript when a marker is dragged and released.
+    // <param name="entityType">The type of entity moved: "vault" or "midpoint"</param>
+    // <param name="entityId">The unique ID of the entity that was moved</param>
+    // <param name="newLat">The new latitude coordinate after the drag</param>
+    // <param name="newLng">The new longitude coordinate after the drag</param>
     [JSInvokable]
     public async Task OnMarkerDragEnd(string entityType, int entityId, double newLat, double newLng)
     {
@@ -759,11 +697,9 @@ else
         }
     }
 
-    /// <summary>
-    /// Handles map click events from JavaScript. This method is called via JSInterop when the user clicks on the map.
-    /// </summary>
-    /// <param name="lat">Latitude of the click location.</param>
-    /// <param name="lng">Longitude of the click location.</param>
+    // Handles map click events from JavaScript. This method is called via JSInterop when the user clicks on the map.
+    // <param name="lat">Latitude of the click location.</param>
+    // <param name="lng">Longitude of the click location.</param>
     [JSInvokable]
     public async Task OnMapClick(double lat, double lng)
     {
@@ -799,10 +735,8 @@ else
         StateHasChanged();
     }
 
-    /// <summary>
-    /// Changes the current map interaction mode and provides user feedback.
-    /// </summary>
-    /// <param name="mode">The mode to switch to.</param>
+    // Changes the current map interaction mode and provides user feedback.
+    // <param name="mode">The mode to switch to.</param>
     private async Task SetMode(MapMode mode)
     {
         try
@@ -854,9 +788,7 @@ else
         }
     }
 
-    /// <summary>
-    /// Returns user-friendly instructions for the current map mode.
-    /// </summary>
+    // Returns user-friendly instructions for the current map mode.
     private string GetModeInstructions()
     {
         return currentMode switch
@@ -870,11 +802,9 @@ else
         };
     }
 
-    /// <summary>
-    /// Returns the CSS class name for the map cursor based on the current editing mode.
-    /// This provides visual feedback to users about what action they can perform.
-    /// </summary>
-    /// <returns>A CSS class name that sets the appropriate cursor style</returns>
+    // Returns the CSS class name for the map cursor based on the current editing mode.
+    // This provides visual feedback to users about what action they can perform.
+    // <returns>A CSS class name that sets the appropriate cursor style</returns>
     private string GetMapCursorClass()
     {
         return currentMode switch
@@ -889,11 +819,9 @@ else
         };
     }
 
-    /// <summary>
-    /// Creates a new vault at the specified geographic coordinates.
-    /// </summary>
-    /// <param name="lat">Latitude of the vault location.</param>
-    /// <param name="lng">Longitude of the vault location.</param>
+    // Creates a new vault at the specified geographic coordinates.
+    // <param name="lat">Latitude of the vault location.</param>
+    // <param name="lng">Longitude of the vault location.</param>
     private async Task CreateVaultAtLocation(double lat, double lng)
     {
         if (module == null || mapInstance == null) return;
@@ -975,11 +903,9 @@ else
         }
     }
 
-    /// <summary>
-    /// Creates a new midpoint at the specified geographic coordinates.
-    /// </summary>
-    /// <param name="lat">Latitude of the midpoint location.</param>
-    /// <param name="lng">Longitude of the midpoint location.</param>
+    // Creates a new midpoint at the specified geographic coordinates.
+    // <param name="lat">Latitude of the midpoint location.</param>
+    // <param name="lng">Longitude of the midpoint location.</param>
     private async Task CreateMidpointAtLocation(double lat, double lng)
     {
         if (module == null || mapInstance == null) return;
@@ -1061,12 +987,10 @@ else
         }
     }
 
-    /// <summary>
-    /// Adds a point to the current cable being drawn and updates the preview polyline.
-    /// Shows white circle markers at each point as it's added (similar to Google My Maps).
-    /// </summary>
-    /// <param name="lat">Latitude of the point.</param>
-    /// <param name="lng">Longitude of the point.</param>
+    // Adds a point to the current cable being drawn and updates the preview polyline.
+    // Shows white circle markers at each point as it's added (similar to Google My Maps).
+    // <param name="lat">Latitude of the point.</param>
+    // <param name="lng">Longitude of the point.</param>
     private async Task AddCablePoint(double lat, double lng)
     {
         if (module == null || mapInstance == null) return;
@@ -1095,9 +1019,7 @@ else
         }
     }
 
-    /// <summary>
-    /// Completes the cable drawing by saving the collected points as a LineString to the database.
-    /// </summary>
+    // Completes the cable drawing by saving the collected points as a LineString to the database.
     private async Task FinishCable()
     {
         if (cablePoints.Count < 2)
@@ -1167,9 +1089,7 @@ else
         }
     }
 
-    /// <summary>
-    /// Cancels the current cable drawing operation and clears the preview.
-    /// </summary>
+    // Cancels the current cable drawing operation and clears the preview.
     private async Task CancelCable()
     {
         if (module != null && mapInstance != null)
@@ -1191,11 +1111,9 @@ else
         currentMode = MapMode.View;
     }
 
-    /// <summary>
-    /// Draws a cable on the map with editable vertex markers (white circles).
-    /// Each vertex can be dragged to adjust the cable shape.
-    /// </summary>
-    /// <param name="cable">The cable to draw</param>
+    // Draws a cable on the map with editable vertex markers (white circles).
+    // Each vertex can be dragged to adjust the cable shape.
+    // <param name="cable">The cable to draw</param>
     private async Task DrawCableWithVertices(Cable cable)
     {
         if (module == null || mapInstance == null || cable.Path == null || dotNetReference == null)
@@ -1280,10 +1198,8 @@ else
         }
     }
 
-    /// <summary>
-    /// Shows the vertex markers for a specific cable.
-    /// </summary>
-    /// <param name="cableId">The ID of the cable whose vertices should be shown</param>
+    // Shows the vertex markers for a specific cable.
+    // <param name="cableId">The ID of the cable whose vertices should be shown</param>
     private async Task ShowCableVertices(int cableId)
     {
         if (module == null || mapInstance == null || !cableVertexMarkers.ContainsKey(cableId))
@@ -1295,10 +1211,8 @@ else
         }
     }
 
-    /// <summary>
-    /// Hides the vertex markers for a specific cable.
-    /// </summary>
-    /// <param name="cableId">The ID of the cable whose vertices should be hidden</param>
+    // Hides the vertex markers for a specific cable.
+    // <param name="cableId">The ID of the cable whose vertices should be hidden</param>
     private async Task HideCableVertices(int cableId)
     {
         if (module == null || mapInstance == null || !cableVertexMarkers.ContainsKey(cableId))
@@ -1310,9 +1224,7 @@ else
         }
     }
 
-    /// <summary>
-    /// Reloads the vaults from the API and refreshes the display.
-    /// </summary>
+    // Reloads the vaults from the API and refreshes the display.
     private async Task LoadVaults()
     {
         var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
@@ -1320,9 +1232,7 @@ else
         vaults = await Http.GetFromJsonAsync<Vault[]>("api/vaults", options);
     }
 
-    /// <summary>
-    /// Reloads the midpoints from the API and refreshes the display.
-    /// </summary>
+    // Reloads the midpoints from the API and refreshes the display.
     private async Task LoadMidpoints()
     {
         var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
@@ -1330,9 +1240,7 @@ else
         midpoints = await Http.GetFromJsonAsync<Midpoint[]>("api/midpoints", options);
     }
 
-    /// <summary>
-    /// Reloads the cables from the API and refreshes the display.
-    /// </summary>
+    // Reloads the cables from the API and refreshes the display.
     private async Task LoadCables()
     {
         var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
@@ -1340,11 +1248,9 @@ else
         cables = await Http.GetFromJsonAsync<Cable[]>("api/cables", options);
     }
 
-    /// <summary>
-    /// Deletes a vault from the database and removes it from the map.
-    /// Also adds the deletion to the undo history so it can be undone.
-    /// </summary>
-    /// <param name="vaultId">The unique ID of the vault to delete</param>
+    // Deletes a vault from the database and removes it from the map.
+    // Also adds the deletion to the undo history so it can be undone.
+    // <param name="vaultId">The unique ID of the vault to delete</param>
     private async Task DeleteVault(int vaultId)
     {
         if (module == null || mapInstance == null) return;
@@ -1416,11 +1322,9 @@ else
         }
     }
 
-    /// <summary>
-    /// Deletes a midpoint from the database and removes it from the map.
-    /// Also adds the deletion to the undo history so it can be undone.
-    /// </summary>
-    /// <param name="midpointId">The unique ID of the midpoint to delete</param>
+    // Deletes a midpoint from the database and removes it from the map.
+    // Also adds the deletion to the undo history so it can be undone.
+    // <param name="midpointId">The unique ID of the midpoint to delete</param>
     private async Task DeleteMidpoint(int midpointId)
     {
         if (module == null || mapInstance == null) return;
@@ -1492,11 +1396,9 @@ else
         }
     }
 
-    /// <summary>
-    /// Deletes a cable from the database and removes it from the map, including all vertex markers.
-    /// Also adds the deletion to the undo history so it can be undone.
-    /// </summary>
-    /// <param name="cableId">The unique ID of the cable to delete</param>
+    // Deletes a cable from the database and removes it from the map, including all vertex markers.
+    // Also adds the deletion to the undo history so it can be undone.
+    // <param name="cableId">The unique ID of the cable to delete</param>
     private async Task DeleteCable(int cableId)
     {
         if (module == null || mapInstance == null) return;
@@ -1578,13 +1480,11 @@ else
         }
     }
 
-    /// <summary>
-    /// Gets the color name string based on the vault status.
-    /// Used to set the Color property when creating or updating vaults.
-    /// Maps status colors: New (blue), Pending (brown), Review (gray), Complete (green), Issue (red).
-    /// </summary>
-    /// <param name="status">The vault status to get the color for</param>
-    /// <returns>A color name string (e.g., "Blue", "Brown", "Gray", "Green", "Red")</returns>
+    // Gets the color name string based on the vault status.
+    // Used to set the Color property when creating or updating vaults.
+    // Maps status colors: New (blue), Pending (brown), Review (gray), Complete (green), Issue (red).
+    // <param name="status">The vault status to get the color for</param>
+    // <returns>A color name string (e.g., "Blue", "Brown", "Gray", "Green", "Red")</returns>
     private string GetStatusColor(VaultStatus status)
     {
         return status switch
@@ -1598,13 +1498,11 @@ else
         };
     }
 
-    /// <summary>
-    /// Gets the color name string based on the midpoint status.
-    /// Used to set the Color property when creating or updating midpoints.
-    /// Maps status colors: New (black), Review (light gray), Complete (light green), Issue (light red).
-    /// </summary>
-    /// <param name="status">The midpoint status to get the color for</param>
-    /// <returns>A color name string (e.g., "Black", "LightGray", "LightGreen", "LightCoral")</returns>
+    // Gets the color name string based on the midpoint status.
+    // Used to set the Color property when creating or updating midpoints.
+    // Maps status colors: New (black), Review (light gray), Complete (light green), Issue (light red).
+    // <param name="status">The midpoint status to get the color for</param>
+    // <returns>A color name string (e.g., "Black", "LightGray", "LightGreen", "LightCoral")</returns>
     private string GetMidpointStatusColor(MidpointStatus status)
     {
         return status switch
@@ -1617,13 +1515,11 @@ else
         };
     }
 
-    /// <summary>
-    /// Updates a vault's location after it has been dragged to a new position on the map.
-    /// Also adds the move to the undo history so it can be undone.
-    /// </summary>
-    /// <param name="vaultId">The unique ID of the vault to update</param>
-    /// <param name="newLat">The new latitude coordinate</param>
-    /// <param name="newLng">The new longitude coordinate</param>
+    // Updates a vault's location after it has been dragged to a new position on the map.
+    // Also adds the move to the undo history so it can be undone.
+    // <param name="vaultId">The unique ID of the vault to update</param>
+    // <param name="newLat">The new latitude coordinate</param>
+    // <param name="newLng">The new longitude coordinate</param>
     private async Task UpdateVaultLocation(int vaultId, double newLat, double newLng)
     {
         if (module == null || mapInstance == null) return;
@@ -1739,13 +1635,11 @@ else
         }
     }
 
-    /// <summary>
-    /// Updates a midpoint's location after it has been dragged to a new position on the map.
-    /// Also adds the move to the undo history so it can be undone.
-    /// </summary>
-    /// <param name="midpointId">The unique ID of the midpoint to update</param>
-    /// <param name="newLat">The new latitude coordinate</param>
-    /// <param name="newLng">The new longitude coordinate</param>
+    // Updates a midpoint's location after it has been dragged to a new position on the map.
+    // Also adds the move to the undo history so it can be undone.
+    // <param name="midpointId">The unique ID of the midpoint to update</param>
+    // <param name="newLat">The new latitude coordinate</param>
+    // <param name="newLng">The new longitude coordinate</param>
     private async Task UpdateMidpointLocation(int midpointId, double newLat, double newLng)
     {
         if (module == null || mapInstance == null) return;
@@ -1861,13 +1755,11 @@ else
         }
     }
 
-    /// <summary>
-    /// Calculates and formats the cable length for display in popups.
-    /// Uses the Haversine formula to calculate the great-circle distance between consecutive points,
-    /// then converts the result from meters to feet for display.
-    /// </summary>
-    /// <param name="cable">The cable object containing the Path LineString</param>
-    /// <returns>A formatted string showing the length in feet</returns>
+    // Calculates and formats the cable length for display in popups.
+    // Uses the Haversine formula to calculate the great-circle distance between consecutive points,
+    // then converts the result from meters to feet for display.
+    // <param name="cable">The cable object containing the Path LineString</param>
+    // <returns>A formatted string showing the length in feet</returns>
     private string GetCableLengthForPopup(Cable? cable)
     {
         if (cable?.Path == null || cable.Path.NumPoints < 2)
@@ -1919,11 +1811,9 @@ else
         }
     }
 
-    /// <summary>
-    /// Handles the Enter key press in the search input field.
-    /// Triggers the search when the user presses Enter.
-    /// </summary>
-    /// <param name="e">Keyboard event arguments</param>
+    // Handles the Enter key press in the search input field.
+    // Triggers the search when the user presses Enter.
+    // <param name="e">Keyboard event arguments</param>
     private async Task HandleSearchKeyPress(KeyboardEventArgs e)
     {
         if (e.Key == "Enter" && !isSearching && !string.IsNullOrWhiteSpace(searchQuery))
@@ -1932,12 +1822,10 @@ else
         }
     }
 
-    /// <summary>
-    /// Searches for a location by address or coordinates and navigates the map to that location.
-    /// Supports two input formats:
-    /// 1. Street addresses (e.g., "123 Main St, San Antonio, TX") - uses Nominatim geocoding
-    /// 2. Coordinates (e.g., "29.54248, -98.73548" or "29.54248,-98.73548") - parses directly
-    /// </summary>
+    // Searches for a location by address or coordinates and navigates the map to that location.
+    // Supports two input formats:
+    // 1. Street addresses (e.g., "123 Main St, San Antonio, TX") - uses Nominatim geocoding
+    // 2. Coordinates (e.g., "29.54248, -98.73548" or "29.54248,-98.73548") - parses directly
     private async Task SearchLocation()
     {
         if (string.IsNullOrWhiteSpace(searchQuery))
@@ -1976,14 +1864,12 @@ else
         }
     }
 
-    /// <summary>
-    /// Attempts to parse the search query as coordinates (latitude, longitude).
-    /// Supports formats like "29.54248, -98.73548" or "29.54248,-98.73548".
-    /// </summary>
-    /// <param name="query">The search query to parse</param>
-    /// <param name="lat">Output parameter for the parsed latitude</param>
-    /// <param name="lng">Output parameter for the parsed longitude</param>
-    /// <returns>True if the query was successfully parsed as coordinates, false otherwise</returns>
+    // Attempts to parse the search query as coordinates (latitude, longitude).
+    // Supports formats like "29.54248, -98.73548" or "29.54248,-98.73548".
+    // <param name="query">The search query to parse</param>
+    // <param name="lat">Output parameter for the parsed latitude</param>
+    // <param name="lng">Output parameter for the parsed longitude</param>
+    // <returns>True if the query was successfully parsed as coordinates, false otherwise</returns>
     private bool TryParseCoordinates(string query, out double lat, out double lng)
     {
         lat = 0;
@@ -2008,11 +1894,9 @@ else
         return false;
     }
 
-    /// <summary>
-    /// Geocodes an address using the Nominatim API (OpenStreetMap's geocoding service).
-    /// This converts a street address into latitude/longitude coordinates.
-    /// </summary>
-    /// <param name="address">The address to geocode (e.g., "123 Main St, San Antonio, TX")</param>
+    // Geocodes an address using the Nominatim API (OpenStreetMap's geocoding service).
+    // This converts a street address into latitude/longitude coordinates.
+    // <param name="address">The address to geocode (e.g., "123 Main St, San Antonio, TX")</param>
     private async Task GeocodeAddress(string address)
     {
         try
@@ -2067,11 +1951,9 @@ else
         }
     }
 
-    /// <summary>
-    /// Navigates the map to the specified location by panning and zooming.
-    /// </summary>
-    /// <param name="lat">The target latitude</param>
-    /// <param name="lng">The target longitude</param>
+    // Navigates the map to the specified location by panning and zooming.
+    // <param name="lat">The target latitude</param>
+    // <param name="lng">The target longitude</param>
     private async Task NavigateToLocation(double lat, double lng)
     {
         if (module == null || mapInstance == null)
@@ -2093,9 +1975,7 @@ else
         }
     }
 
-    /// <summary>
-    /// Toggles between default map view and satellite view.
-    /// </summary>
+    // Toggles between default map view and satellite view.
     private async Task ToggleMapView()
     {
         if (module == null || mapInstance == null)
@@ -2122,14 +2002,12 @@ else
         }
     }
 
-    /// <summary>
-    /// Handles when a cable vertex is dragged to a new location.
-    /// Updates the cable's path in the database and refreshes the display.
-    /// </summary>
-    /// <param name="cableId">The ID of the cable being modified</param>
-    /// <param name="vertexIndex">The index of the vertex that was moved</param>
-    /// <param name="newLat">The new latitude of the vertex</param>
-    /// <param name="newLng">The new longitude of the vertex</param>
+    // Handles when a cable vertex is dragged to a new location.
+    // Updates the cable's path in the database and refreshes the display.
+    // <param name="cableId">The ID of the cable being modified</param>
+    // <param name="vertexIndex">The index of the vertex that was moved</param>
+    // <param name="newLat">The new latitude of the vertex</param>
+    // <param name="newLng">The new longitude of the vertex</param>
     [JSInvokable]
     public async Task OnCableVertexDragEnd(int cableId, int vertexIndex, double newLat, double newLng)
     {
@@ -2202,11 +2080,9 @@ else
         }
     }
 
-    /// <summary>
-    /// Handles when a cable vertex drag operation starts.
-    /// Ensures the cable is selected so vertices remain visible during dragging.
-    /// </summary>
-    /// <param name="cableId">The ID of the cable being edited</param>
+    // Handles when a cable vertex drag operation starts.
+    // Ensures the cable is selected so vertices remain visible during dragging.
+    // <param name="cableId">The ID of the cable being edited</param>
     [JSInvokable]
     public async Task OnCableVertexDragStart(int cableId)
     {
@@ -2224,11 +2100,9 @@ else
         }
     }
 
-    /// <summary>
-    /// Handles when a cable vertex drag operation completes.
-    /// Hides vertices if the cable is not selected.
-    /// </summary>
-    /// <param name="cableId">The ID of the cable</param>
+    // Handles when a cable vertex drag operation completes.
+    // Hides vertices if the cable is not selected.
+    // <param name="cableId">The ID of the cable</param>
     [JSInvokable]
     public async Task OnCableVertexDragEndComplete(int cableId)
     {
@@ -2240,11 +2114,9 @@ else
         }
     }
 
-    /// <summary>
-    /// Handles when a cable is selected (clicked).
-    /// Shows vertex markers for the selected cable and hides them for previously selected cable.
-    /// </summary>
-    /// <param name="cableId">The ID of the cable that was selected</param>
+    // Handles when a cable is selected (clicked).
+    // Shows vertex markers for the selected cable and hides them for previously selected cable.
+    // <param name="cableId">The ID of the cable that was selected</param>
     [JSInvokable]
     public async Task OnCableSelected(int cableId)
     {
@@ -2270,13 +2142,11 @@ else
         StateHasChanged();
     }
 
-    /// <summary>
-    /// Handles when an entire cable is dragged to a new location.
-    /// Moves all vertices by the same offset.
-    /// </summary>
-    /// <param name="cableId">The ID of the cable being moved</param>
-    /// <param name="deltaLat">The change in latitude</param>
-    /// <param name="deltaLng">The change in longitude</param>
+    // Handles when an entire cable is dragged to a new location.
+    // Moves all vertices by the same offset.
+    // <param name="cableId">The ID of the cable being moved</param>
+    // <param name="deltaLat">The change in latitude</param>
+    // <param name="deltaLng">The change in longitude</param>
     [JSInvokable]
     public async Task OnCableDragEnd(int cableId, double deltaLat, double deltaLng)
     {
@@ -2339,11 +2209,9 @@ else
         }
     }
 
-    /// <summary>
-    /// Opens the edit modal for a vault or midpoint.
-    /// </summary>
-    /// <param name="entityType">The type of entity: "vault" or "midpoint"</param>
-    /// <param name="entityId">The ID of the entity to edit</param>
+    // Opens the edit modal for a vault or midpoint.
+    // <param name="entityType">The type of entity: "vault" or "midpoint"</param>
+    // <param name="entityId">The ID of the entity to edit</param>
     [JSInvokable]
     public async Task OpenEditModal(string entityType, int entityId)
     {
@@ -2413,9 +2281,7 @@ else
         }
     }
 
-    /// <summary>
-    /// Closes the edit modal and clears the edit models.
-    /// </summary>
+    // Closes the edit modal and clears the edit models.
     private void CloseEditModal()
     {
         editingEntity = null;
@@ -2426,10 +2292,8 @@ else
         StateHasChanged();
     }
 
-    /// <summary>
-    /// Saves vault changes from the modal and updates the map popup.
-    /// Also adds the edit to the undo history so it can be undone.
-    /// </summary>
+    // Saves vault changes from the modal and updates the map popup.
+    // Also adds the edit to the undo history so it can be undone.
     private async Task SaveVaultFromModal()
     {
         if (editingVaultModel == null || editingEntity == null || editingEntity.Value.Type != "vault")
@@ -2506,10 +2370,8 @@ else
         }
     }
 
-    /// <summary>
-    /// Saves midpoint changes from the modal and updates the map popup.
-    /// Also adds the edit to the undo history so it can be undone.
-    /// </summary>
+    // Saves midpoint changes from the modal and updates the map popup.
+    // Also adds the edit to the undo history so it can be undone.
     private async Task SaveMidpointFromModal()
     {
         if (editingMidpointModel == null || editingEntity == null || editingEntity.Value.Type != "midpoint")
@@ -2586,10 +2448,8 @@ else
         }
     }
 
-    /// <summary>
-    /// Updates the popup content and marker color for a vault after editing.
-    /// </summary>
-    /// <param name="vaultId">The ID of the vault to update</param>
+    // Updates the popup content and marker color for a vault after editing.
+    // <param name="vaultId">The ID of the vault to update</param>
     private async Task UpdateVaultPopup(int vaultId)
     {
         if (module == null || mapInstance == null || !mapLayers.ContainsKey($"vault_{vaultId}"))
@@ -2655,11 +2515,9 @@ else
         }
     }
 
-    /// <summary>
-    /// Updates the marker visual state for a vault when selection changes.
-    /// Highlights the marker to show it's selected.
-    /// </summary>
-    /// <param name="vaultId">The ID of the vault to update</param>
+    // Updates the marker visual state for a vault when selection changes.
+    // Highlights the marker to show it's selected.
+    // <param name="vaultId">The ID of the vault to update</param>
     private async Task UpdateVaultMarkerSelection(int vaultId)
     {
         if (module == null || mapInstance == null || !mapLayers.ContainsKey($"vault_{vaultId}"))
@@ -2677,11 +2535,9 @@ else
         }
     }
 
-    /// <summary>
-    /// Updates the marker visual state for a midpoint when selection changes.
-    /// Highlights the marker to show it's selected.
-    /// </summary>
-    /// <param name="midpointId">The ID of the midpoint to update</param>
+    // Updates the marker visual state for a midpoint when selection changes.
+    // Highlights the marker to show it's selected.
+    // <param name="midpointId">The ID of the midpoint to update</param>
     private async Task UpdateMidpointMarkerSelection(int midpointId)
     {
         if (module == null || mapInstance == null || !mapLayers.ContainsKey($"midpoint_{midpointId}"))
@@ -2699,9 +2555,7 @@ else
         }
     }
 
-    /// <summary>
-    /// Clears all selections and updates marker visuals to remove highlighting.
-    /// </summary>
+    // Clears all selections and updates marker visuals to remove highlighting.
     private async Task ClearAllSelections()
     {
         // Store the IDs before clearing so we can update their visuals
@@ -2726,10 +2580,8 @@ else
         StateHasChanged();
     }
 
-    /// <summary>
-    /// Downloads photos for all selected vaults and midpoints as a single ZIP file.
-    /// Each entity's photos are placed in a separate folder within the ZIP file.
-    /// </summary>
+    // Downloads photos for all selected vaults and midpoints as a single ZIP file.
+    // Each entity's photos are placed in a separate folder within the ZIP file.
     private async Task DownloadSelectedPhotos()
     {
         if (selectedVaultIds.Count == 0 && selectedMidpointIds.Count == 0)
@@ -2800,10 +2652,8 @@ else
         }
     }
 
-    /// <summary>
-    /// Updates the popup content and marker color for a midpoint after editing.
-    /// </summary>
-    /// <param name="midpointId">The ID of the midpoint to update</param>
+    // Updates the popup content and marker color for a midpoint after editing.
+    // <param name="midpointId">The ID of the midpoint to update</param>
     private async Task UpdateMidpointPopup(int midpointId)
     {
         if (module == null || mapInstance == null || !mapLayers.ContainsKey($"midpoint_{midpointId}"))
@@ -2869,9 +2719,7 @@ else
         }
     }
 
-    /// <summary>
-    /// Edit model for vault editing in the modal.
-    /// </summary>
+    // Edit model for vault editing in the modal.
     private class VaultEditModel
     {
         public int Id { get; set; }
@@ -2880,9 +2728,7 @@ else
         public string? Description { get; set; }
     }
 
-    /// <summary>
-    /// Edit model for midpoint editing in the modal.
-    /// </summary>
+    // Edit model for midpoint editing in the modal.
     private class MidpointEditModel
     {
         public int Id { get; set; }
@@ -2891,10 +2737,8 @@ else
         public string? Description { get; set; }
     }
 
-    /// <summary>
-    /// Saves cable changes from the modal and updates the map popup and polyline color.
-    /// Also adds the edit to the undo history so it can be undone.
-    /// </summary>
+    // Saves cable changes from the modal and updates the map popup and polyline color.
+    // Also adds the edit to the undo history so it can be undone.
     private async Task SaveCableFromModal()
     {
         if (editingCableModel == null || editingEntity == null || editingEntity.Value.Type != "cable")
@@ -2971,10 +2815,8 @@ else
         }
     }
 
-    /// <summary>
-    /// Updates the cable polyline and popup after editing.
-    /// </summary>
-    /// <param name="cableId">The ID of the cable to update</param>
+    // Updates the cable polyline and popup after editing.
+    // <param name="cableId">The ID of the cable to update</param>
     private async Task UpdateCablePopup(int cableId)
     {
         if (module == null || mapInstance == null || !mapLayers.ContainsKey($"cable_{cableId}"))
@@ -3001,13 +2843,11 @@ else
         }
     }
 
-    /// <summary>
-    /// Builds HTML for photo thumbnails with navigation in popups.
-    /// </summary>
-    /// <param name="entityId">The ID of the entity (vault or midpoint)</param>
-    /// <param name="photos">List of photos for the entity</param>
-    /// <param name="entityType">Type of entity: "vault" or "midpoint"</param>
-    /// <returns>HTML string for photo thumbnails, or empty string if no photos</returns>
+    // Builds HTML for photo thumbnails with navigation in popups.
+    // <param name="entityId">The ID of the entity (vault or midpoint)</param>
+    // <param name="photos">List of photos for the entity</param>
+    // <param name="entityType">Type of entity: "vault" or "midpoint"</param>
+    // <returns>HTML string for photo thumbnails, or empty string if no photos</returns>
     private string BuildPhotosHtml(int entityId, List<Photo>? photos, string entityType)
     {
         if (photos == null || photos.Count == 0)
@@ -3046,9 +2886,7 @@ else
             $"</div>";
     }
 
-    /// <summary>
-    /// Edit model for cable editing in the modal.
-    /// </summary>
+    // Edit model for cable editing in the modal.
     private class CableEditModel
     {
         public int Id { get; set; }
@@ -3057,9 +2895,7 @@ else
         public string Color { get; set; } = "Black";
     }
 
-    /// <summary>
-    /// Undoes the last action performed (delete, edit, or move) by restoring the previous state.
-    /// </summary>
+    // Undoes the last action performed (delete, edit, or move) by restoring the previous state.
     private async Task UndoLastAction()
     {
         if (undoHistory.Count == 0 || module == null || mapInstance == null)
@@ -3262,10 +3098,8 @@ else
         }
     }
 
-    /// <summary>
-    /// Cleanup method to dispose of resources when the component is destroyed.
-    /// Prevents memory leaks by disposing the DotNetObjectReference.
-    /// </summary>
+    // Cleanup method to dispose of resources when the component is destroyed.
+    // Prevents memory leaks by disposing the DotNetObjectReference.
     public void Dispose()
     {
         dotNetReference?.Dispose();

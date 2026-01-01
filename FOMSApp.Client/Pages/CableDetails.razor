@@ -102,23 +102,8 @@ else
     [Parameter] public int Id { get; set; }
     private Cable? cable;
     
-    /// <summary>
-    /// Indicates whether the cable details are currently being edited.
-    /// When true, the UI switches from view mode to edit mode (form fields).
-    /// </summary>
     private bool isEditing = false;
-
-    /// <summary>
-    /// Indicates whether a cable update is currently in progress.
-    /// Used to disable the save button and show a loading spinner during save.
-    /// </summary>
     private bool isSaving = false;
-
-    /// <summary>
-    /// Temporary model used for editing cable properties.
-    /// This allows users to make changes without modifying the original cable object
-    /// until they click "Save Changes". If they cancel, the original values are preserved.
-    /// </summary>
     private CableEditModel? editModel;
 
     protected override async Task OnInitializedAsync()
@@ -126,9 +111,6 @@ else
         await LoadCable();
     }
 
-    /// <summary>
-    /// Loads the cable details from the API.
-    /// </summary>
     private async Task LoadCable()
     {
         var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
@@ -136,31 +118,21 @@ else
         cable = await Http.GetFromJsonAsync<Cable>($"api/cables/{Id}", options);
     }
 
-    /// <summary>
-    /// Calculates and formats the cable length in feet.
-    /// Uses the Haversine formula to calculate the great-circle distance between consecutive points,
-    /// then converts the result from meters to feet for display.
-    /// </summary>
-    /// <param name="cable">The cable object containing the Path LineString</param>
-    /// <returns>A formatted string showing the length in feet</returns>
+    // Calculates cable length using Haversine formula
     private string GetCableLength(Cable? cable)
     {
         if (cable?.Path == null || cable.Path.NumPoints < 2)
-        {
             return "N/A (insufficient points)";
-        }
 
         double totalLengthMeters = 0.0;
         var coordinates = cable.Path.Coordinates;
 
-        // Calculate distance between consecutive points using Haversine formula
         for (int i = 0; i < coordinates.Length - 1; i++)
         {
             var point1 = coordinates[i];
             var point2 = coordinates[i + 1];
             
-            // Haversine formula to calculate distance between two lat/lng points
-            double lat1 = point1.Y * Math.PI / 180.0; // Convert to radians
+            double lat1 = point1.Y * Math.PI / 180.0;
             double lat2 = point2.Y * Math.PI / 180.0;
             double deltaLat = (point2.Y - point1.Y) * Math.PI / 180.0;
             double deltaLng = (point2.X - point1.X) * Math.PI / 180.0;
@@ -170,61 +142,36 @@ else
                        Math.Sin(deltaLng / 2) * Math.Sin(deltaLng / 2);
             double c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
             
-            // Earth's radius in meters (WGS84)
             const double earthRadiusMeters = 6371000.0;
-            double distanceMeters = earthRadiusMeters * c;
-            
-            totalLengthMeters += distanceMeters;
+            totalLengthMeters += earthRadiusMeters * c;
         }
 
-        // Convert meters to feet (1 meter = 3.28084 feet)
         const double metersToFeet = 3.28084;
         double totalLengthFeet = totalLengthMeters * metersToFeet;
 
-        // Format the result in feet
-        if (totalLengthFeet < 5280) // Less than 1 mile
-        {
+        if (totalLengthFeet < 5280)
             return $"{totalLengthFeet:F2} feet";
-        }
         else
-        {
-            // Display in both miles and feet for longer cables
-            double miles = totalLengthFeet / 5280.0;
-            return $"{miles:F3} miles ({totalLengthFeet:F2} feet)";
-        }
+            return $"{totalLengthFeet / 5280.0:F3} miles ({totalLengthFeet:F2} feet)";
     }
 
-    /// <summary>
-    /// Gets the hex color code for a given color name.
-    /// Used to display the color badge with the correct background color.
-    /// </summary>
-    /// <param name="colorName">The color name (e.g., "Blue", "Orange", "Black")</param>
-    /// <returns>A hex color code string</returns>
-    private string GetColorHex(string colorName)
+    // Gets hex color for display
+    private string GetColorHex(string colorName) => colorName?.ToLower() switch
     {
-        return colorName?.ToLower() switch
-        {
-            "black" => "#000000",
-            "blue" => "#007bff",
-            "orange" => "#ff8c00",
-            "green" => "#28a745",
-            "brown" => "#8b4513",
-            "pink" => "#ff69b4",
-            "teal" => "#20c997",
-            _ => "#000000" // Default to black
-        };
-    }
+        "black" => "#000000",
+        "blue" => "#007bff",
+        "orange" => "#ff8c00",
+        "green" => "#28a745",
+        "brown" => "#8b4513",
+        "pink" => "#ff69b4",
+        "teal" => "#20c997",
+        _ => "#000000"
+    };
 
-    /// <summary>
-    /// Switches the UI from view mode to edit mode.
-    /// Creates a copy of the current cable data for editing, allowing users to modify
-    /// properties without affecting the original until they save.
-    /// </summary>
     private void StartEditing()
     {
         if (cable == null) return;
 
-        // Create a copy of the cable data for editing
         editModel = new CableEditModel
         {
             Id = cable.Id,
@@ -237,10 +184,6 @@ else
         StateHasChanged();
     }
 
-    /// <summary>
-    /// Cancels editing and returns to view mode without saving changes.
-    /// Discards any modifications made to the editModel.
-    /// </summary>
     private void CancelEditing()
     {
         isEditing = false;
@@ -248,50 +191,34 @@ else
         StateHasChanged();
     }
 
-    /// <summary>
-    /// Saves the edited cable properties to the server.
-    /// Called when the user submits the edit form (clicks "Save Changes").
-    /// </summary>
     private async Task SaveCable()
     {
-        if (editModel == null || cable == null)
-        {
-            return;
-        }
+        if (editModel == null || cable == null) return;
 
         isSaving = true;
         StateHasChanged();
 
         try
         {
-            // Create a Cable object with the updated properties
-            // Note: We preserve the Path property from the original cable (it cannot be changed)
             var updatedCable = new Cable
             {
                 Id = editModel.Id,
                 Name = editModel.Name,
                 Description = string.IsNullOrWhiteSpace(editModel.Description) ? null : editModel.Description,
                 Color = editModel.Color,
-                Path = cable.Path // Preserve the original path - it cannot be changed after creation
+                Path = cable.Path
             };
 
-            // Serialize with GeoJSON support for the Path property
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             options.Converters.Add(new GeoJsonConverterFactory());
 
-            // Send PUT request to update the cable
             var response = await Http.PutAsJsonAsync($"api/cables/{editModel.Id}", updatedCable, options);
 
             if (response.IsSuccessStatusCode)
             {
-                // Reload the cable from the server to get the latest data
                 await LoadCable();
-                
-                // Exit edit mode
                 isEditing = false;
                 editModel = null;
-                
-                // Force UI update to reflect the changes
                 StateHasChanged();
             }
             else
@@ -313,33 +240,12 @@ else
         }
     }
 
-    /// <summary>
-    /// Data model used for editing cable properties in the form.
-    /// This is separate from the Cable model to allow validation and prevent
-    /// accidentally modifying properties that shouldn't be edited (like Path).
-    /// </summary>
+    // Edit model for cable form
     private class CableEditModel
     {
-        /// <summary>
-        /// The unique identifier of the cable being edited.
-        /// </summary>
         public int Id { get; set; }
-
-        /// <summary>
-        /// The cable name. Required field for identification.
-        /// </summary>
         public string Name { get; set; } = string.Empty;
-
-        /// <summary>
-        /// Optional description or notes about the cable.
-        /// Can be null or empty if no description is provided.
-        /// </summary>
         public string? Description { get; set; }
-
-        /// <summary>
-        /// The color used to render the cable on the map.
-        /// Must be one of: Black, Blue, Orange, Green, Brown, Pink, Teal.
-        /// </summary>
         public string Color { get; set; } = "Black";
     }
 }

@@ -209,7 +209,7 @@ else
         </div>
     </div>
 
-    @if (selectedPhotoUrl != null) // Show the zoomed-in photo
+    @if (selectedPhotoUrl != null)
     {
         <div class="modal-backdrop"
             style="background-color: rgba(0,0,0,0.9); position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1050; display: flex; justify-content: center; align-items: center;"
@@ -217,9 +217,7 @@ else
             <div style="position: relative; max-width: 90%; max-height: 90%;">
                 <img src="@selectedPhotoUrl"
                     style="max-width: 100%; max-height: 90vh; border: 2px solid white; box-shadow: 0 0 20px black;" />
-
-                <button class="btn btn-danger" style="position: absolute; top: -40px; right: 0;" @onclick="ClosePhoto">Close
-                    X</button>
+                <button class="btn btn-danger" style="position: absolute; top: -40px; right: 0;" @onclick="ClosePhoto">Close X</button>
             </div>
         </div>
     }
@@ -229,55 +227,15 @@ else
     [Parameter] public int Id { get; set; }
     private Midpoint? midpoint;
     private List<Photo>? photos;
-    private string? selectedPhotoUrl; // Holds the URL of the photo we want to zoom in on
+    private string? selectedPhotoUrl;
     
-    /// <summary>
-    /// Indicates whether the midpoint details are currently being edited.
-    /// When true, the UI switches from view mode to edit mode (form fields).
-    /// </summary>
     private bool isEditing = false;
-
-    /// <summary>
-    /// Indicates whether a midpoint update is currently in progress.
-    /// Used to disable the save button and show a loading spinner during save.
-    /// </summary>
     private bool isSaving = false;
-
-    /// <summary>
-    /// Temporary model used for editing midpoint properties.
-    /// This allows users to make changes without modifying the original midpoint object
-    /// until they click "Save Changes". If they cancel, the original values are preserved.
-    /// </summary>
     private MidpointEditModel? editModel;
-
-    /// <summary>
-    /// Reference to the file input element. Used to reset it after successful upload
-    /// so users can upload multiple photos without page refresh.
-    /// </summary>
     private InputFile? fileInput;
-
-    /// <summary>
-    /// Stores the currently selected files before upload.
-    /// This allows users to browse and select multiple files, then upload them with a separate button.
-    /// </summary>
     private List<IBrowserFile> selectedFiles = new();
-
-    /// <summary>
-    /// Tracks the current upload progress when uploading multiple files.
-    /// Displays which file number is currently being uploaded (e.g., "2 of 5").
-    /// </summary>
     private int uploadProgress = 0;
-
-    /// <summary>
-    /// Indicates whether a photo upload is currently in progress.
-    /// Used to disable the upload button and show a loading spinner during upload.
-    /// </summary>
     private bool isUploading = false;
-
-    /// <summary>
-    /// Indicates whether a photo download is currently in progress.
-    /// Used to disable the download button and show a loading spinner during download.
-    /// </summary>
     private bool isDownloading = false;
 
     protected override async Task OnInitializedAsync()
@@ -286,9 +244,6 @@ else
         await LoadPhotos();
     }
 
-    /// <summary>
-    /// Loads the midpoint details from the API.
-    /// </summary>
     private async Task LoadMidpoint()
     {
         var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
@@ -296,61 +251,28 @@ else
         midpoint = await Http.GetFromJsonAsync<Midpoint>($"api/midpoints/{Id}", options);
     }
 
-    /// <summary>
-    /// Loads all photos associated with this midpoint from the API.
-    /// </summary>
     private async Task LoadPhotos()
     {
-        // Fetch the list of photos for this specific midpoint
         photos = await Http.GetFromJsonAsync<List<Photo>>($"api/photos/midpoint/{Id}");
     }
 
-    /// <summary>
-    /// Opens a photo in a larger view by setting the selectedPhotoUrl.
-    /// </summary>
-    /// <param name="fileName">The filename of the photo to display</param>
-    private void OpenPhoto(string fileName)
-    {
-        selectedPhotoUrl = $"{Http.BaseAddress}uploads/{fileName}";
-    }
+    private void OpenPhoto(string fileName) => selectedPhotoUrl = $"{Http.BaseAddress}uploads/{fileName}";
+    private void ClosePhoto() => selectedPhotoUrl = null;
 
-    /// <summary>
-    /// Closes the larger photo view by clearing the selectedPhotoUrl.
-    /// </summary>
-    private void ClosePhoto()
+    // Maps status to Bootstrap badge color
+    private string GetStatusBadgeColor(MidpointStatus status) => status switch
     {
-        selectedPhotoUrl = null;
-    }
+        MidpointStatus.New => "dark",
+        MidpointStatus.Review => "secondary",
+        MidpointStatus.Complete => "success",
+        MidpointStatus.Issue => "danger",
+        _ => "dark"
+    };
 
-    /// <summary>
-    /// Gets the Bootstrap badge color class based on the midpoint status.
-    /// Used to visually distinguish different statuses in the UI.
-    /// Maps status colors: New (black), Review (light gray), Complete (light green), Issue (light red).
-    /// </summary>
-    /// <param name="status">The midpoint status to get the color for</param>
-    /// <returns>A Bootstrap color class name or custom CSS class for colors not in Bootstrap</returns>
-    private string GetStatusBadgeColor(MidpointStatus status)
-    {
-        return status switch
-        {
-            MidpointStatus.New => "dark",              // Black
-            MidpointStatus.Review => "secondary",      // Light Gray
-            MidpointStatus.Complete => "success",      // Light Green (using success as closest Bootstrap option)
-            MidpointStatus.Issue => "danger",          // Light Red (using danger as closest Bootstrap option)
-            _ => "dark"                                // Default to black
-        };
-    }
-
-    /// <summary>
-    /// Switches the UI from view mode to edit mode.
-    /// Creates a copy of the current midpoint data for editing, allowing users to modify
-    /// properties without affecting the original until they save.
-    /// </summary>
     private void StartEditing()
     {
         if (midpoint == null) return;
 
-        // Create a copy of the midpoint data for editing
         editModel = new MidpointEditModel
         {
             Id = midpoint.Id,
@@ -363,10 +285,6 @@ else
         StateHasChanged();
     }
 
-    /// <summary>
-    /// Cancels editing and returns to view mode without saving changes.
-    /// Discards any modifications made to the editModel.
-    /// </summary>
     private void CancelEditing()
     {
         isEditing = false;
@@ -374,47 +292,32 @@ else
         StateHasChanged();
     }
 
-    /// <summary>
-    /// Saves the edited midpoint properties to the server.
-    /// Called when the user submits the edit form (clicks "Save Changes").
-    /// </summary>
     private async Task SaveMidpoint()
     {
-        if (editModel == null || midpoint == null)
-        {
-            return;
-        }
+        if (editModel == null || midpoint == null) return;
 
         isSaving = true;
         StateHasChanged();
 
         try
         {
-            // Create a Midpoint object with the updated properties
-            // Note: We preserve the Location property from the original midpoint
             var updatedMidpoint = new Midpoint
             {
                 Id = editModel.Id,
                 Name = editModel.Name,
                 Status = editModel.Status,
                 Description = string.IsNullOrWhiteSpace(editModel.Description) ? null : editModel.Description,
-                Location = midpoint.Location // Preserve the original location
-                // Note: Color will be automatically set by the API based on Status
+                Location = midpoint.Location
             };
 
-            // Serialize with GeoJSON support for the Location property
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             options.Converters.Add(new GeoJsonConverterFactory());
 
-            // Send PUT request to update the midpoint
             var response = await Http.PutAsJsonAsync($"api/midpoints/{editModel.Id}", updatedMidpoint, options);
 
             if (response.IsSuccessStatusCode)
             {
-                // Reload the midpoint from the server to get the latest data
                 await LoadMidpoint();
-                
-                // Exit edit mode
                 isEditing = false;
                 editModel = null;
             }
@@ -437,25 +340,12 @@ else
         }
     }
 
-    /// <summary>
-    /// Handles file selection when the user browses for files.
-    /// Stores the selected files but does not upload them yet.
-    /// Supports multiple file selection.
-    /// </summary>
-    /// <param name="e">Event arguments containing the selected files</param>
     private void OnFilesSelected(InputFileChangeEventArgs e)
     {
-        // Store all selected files for later upload (limit to 20 files at once to prevent issues)
         selectedFiles = e.GetMultipleFiles(maximumFileCount: 20).ToList();
-        
-        // Trigger UI update to show the selected file names
         StateHasChanged();
     }
 
-    /// <summary>
-    /// Clears the selected files without uploading them.
-    /// Allows users to cancel and select different files.
-    /// </summary>
     private void ClearSelectedFiles()
     {
         selectedFiles.Clear();
@@ -463,17 +353,9 @@ else
         StateHasChanged();
     }
 
-    /// <summary>
-    /// Uploads all previously selected photo files to the server.
-    /// This method is called when the user clicks the "Upload Photo(s)" button.
-    /// Files are uploaded sequentially to provide progress feedback.
-    /// </summary>
     private async Task UploadSelectedPhotos()
     {
-        if (selectedFiles.Count == 0)
-        {
-            return;
-        }
+        if (selectedFiles.Count == 0) return;
 
         isUploading = true;
         uploadProgress = 0;
@@ -492,31 +374,21 @@ else
 
                 try
                 {
-                    // Create a specialized "content" container for sending files
                     using var content = new MultipartFormDataContent();
-
-                    // We must resize/limit the file stream to prevent massive uploads crashing the browser
-                    // Allow up to 20MB (20 * 1024 * 1024 bytes) - reasonable for high-resolution construction photos
-                    // This limit prevents browser memory issues while allowing quality photos
                     var fileContent = new StreamContent(file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024));
                     fileContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
-
                     content.Add(content: fileContent, name: "file", fileName: file.Name);
                     content.Add(content: new StringContent(Id.ToString()), name: "midpointId");
 
-                    // Send to API
                     var response = await Http.PostAsync("api/photos", content);
 
                     if (response.IsSuccessStatusCode)
-                    {
                         successCount++;
-                    }
                     else
                     {
                         failCount++;
                         failedFiles.Add(file.Name);
-                        var errorMessage = await response.Content.ReadAsStringAsync();
-                        Console.WriteLine($"Upload failed for {file.Name}: {errorMessage}");
+                        Console.WriteLine($"Upload failed for {file.Name}");
                     }
                 }
                 catch (Exception ex)
@@ -527,18 +399,12 @@ else
                 }
             }
 
-            // Clear the selected files after all uploads are complete
             selectedFiles.Clear();
             uploadProgress = 0;
-            
-            // Refresh the list so the new photos appear instantly
             await LoadPhotos();
 
-            // Show summary message if there were any failures
             if (failCount > 0)
-            {
                 await JS.InvokeVoidAsync("alert", $"Upload complete: {successCount} succeeded, {failCount} failed.\nFailed files: {string.Join(", ", failedFiles)}");
-            }
         }
         catch (Exception ex)
         {
@@ -552,9 +418,6 @@ else
         }
     }
 
-    /// <summary>
-    /// Downloads all photos for this midpoint as a ZIP file.
-    /// </summary>
     private async Task DownloadAllPhotos()
     {
         if (photos == null || photos.Count == 0)
@@ -568,27 +431,17 @@ else
 
         try
         {
-            // Call the API endpoint to download all photos as a ZIP file
             var response = await Http.GetAsync($"api/photos/midpoint/{Id}/download");
 
             if (response.IsSuccessStatusCode)
             {
-                // Get the ZIP file as a byte array
                 var zipBytes = await response.Content.ReadAsByteArrayAsync();
-                
-                // Construct filename using the midpoint name
-                // Sanitize the midpoint name to remove invalid filename characters
                 string midpointName = midpoint?.Name ?? $"Midpoint_{Id}";
                 string safeMidpointName = string.Join("_", midpointName.Split(System.IO.Path.GetInvalidFileNameChars()));
-                string fileName = $"{safeMidpointName}_Photos.zip";
-
-                // Use JavaScript to trigger the download
-                await JS.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(zipBytes));
+                await JS.InvokeVoidAsync("downloadFile", $"{safeMidpointName}_Photos.zip", Convert.ToBase64String(zipBytes));
             }
             else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-            {
                 await JS.InvokeVoidAsync("alert", "No photos found to download.");
-            }
             else
             {
                 var errorMessage = await response.Content.ReadAsStringAsync();
@@ -607,33 +460,18 @@ else
         }
     }
 
-    /// <summary>
-    /// Deletes a photo from the database and removes it from the display.
-    /// </summary>
-    /// <param name="photoId">The unique ID of the photo to delete</param>
     private async Task DeletePhoto(int photoId)
     {
-        // Show confirmation dialog
-        var confirmed = await JS.InvokeAsync<bool>("confirm", "Are you sure you want to delete this photo? This action cannot be undone.");
-        if (!confirmed)
-        {
-            return;
-        }
+        var confirmed = await JS.InvokeAsync<bool>("confirm", "Are you sure you want to delete this photo?");
+        if (!confirmed) return;
 
         try
         {
-            // Call API to delete the photo
             var response = await Http.DeleteAsync($"api/photos/{photoId}");
-
             if (response.IsSuccessStatusCode)
-            {
-                // Refresh the photos list to remove the deleted photo from the display
                 await LoadPhotos();
-            }
             else
-            {
-                await JS.InvokeAsync<string>("alert", "Failed to delete photo. Please try again.");
-            }
+                await JS.InvokeAsync<string>("alert", "Failed to delete photo.");
         }
         catch (Exception ex)
         {
@@ -642,32 +480,12 @@ else
         }
     }
 
-    /// <summary>
-    /// Data model used for editing midpoint properties in the form.
-    /// This is separate from the Midpoint model to allow validation and prevent
-    /// accidentally modifying properties that shouldn't be edited (like Location).
-    /// </summary>
+    // Edit model for midpoint form
     private class MidpointEditModel
     {
-        /// <summary>
-        /// The unique identifier of the midpoint being edited.
-        /// </summary>
         public int Id { get; set; }
-
-        /// <summary>
-        /// The midpoint name. Required field for identification.
-        /// </summary>
         public string Name { get; set; } = string.Empty;
-
-        /// <summary>
-        /// The current workflow status of the midpoint.
-        /// </summary>
         public MidpointStatus Status { get; set; }
-
-        /// <summary>
-        /// Optional description or notes about the midpoint.
-        /// Can be null or empty if no description is provided.
-        /// </summary>
         public string? Description { get; set; }
     }
 }
