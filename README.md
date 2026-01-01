@@ -20,7 +20,7 @@ Field crews installing fiber optic infrastructure need to document their work wi
 
 ---
 
-## 🚀 Key Features
+## Key Features
 
 ### Current Implementation ✅
 
@@ -159,7 +159,7 @@ FOMSApp/
 
 ---
 
-## 💻 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -285,7 +285,7 @@ The following Azure services are planned to transform this application into a cl
 
 ---
 
-## 📸 Screenshots
+## Screenshots
 
 *Coming soon: Screenshots of the map interface, photo upload workflow, and status tracking*
 
