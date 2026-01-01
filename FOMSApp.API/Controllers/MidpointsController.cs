@@ -1,280 +1,130 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Hosting;
 using FOMSApp.API.Data;
 using FOMSApp.Shared.Models;
-using System.IO;
 
-namespace FOMSApp.API.Controllers
+namespace FOMSApp.API.Controllers;
+
+/// <summary>
+/// API controller for midpoint CRUD operations.
+/// </summary>
+[Route("api/[controller]")]
+[ApiController]
+public class MidpointsController(AppDbContext context, IWebHostEnvironment env) : ControllerBase
 {
+    private readonly AppDbContext _context = context;
+    private readonly IWebHostEnvironment _env = env;
+
     /// <summary>
-    /// RESTful API controller for managing Midpoint entities.
-    /// Handles HTTP requests for creating and reading midpoint markers on the map.
+    /// Gets all midpoints.
     /// </summary>
-    /// <remarks>
-    /// Endpoints:
-    /// - GET /api/midpoints - Get all midpoints
-    /// - POST /api/midpoints - Create a new midpoint
-    /// </remarks>
-    [Route("api/[controller]")]
-    [ApiController]
-    public class MidpointsController : ControllerBase
+    [HttpGet]
+    public async Task<ActionResult<IEnumerable<Midpoint>>> GetMidpoints()
     {
-        /// <summary>
-        /// Database context for accessing midpoint data.
-        /// Injected via constructor dependency injection.
-        /// </summary>
-        private readonly AppDbContext _context;
-
-        /// <summary>
-        /// Provides access to the web application's file system paths (e.g., wwwroot folder).
-        /// Used to delete photo files when a midpoint is deleted.
-        /// </summary>
-        private readonly IWebHostEnvironment _env;
-
-        /// <summary>
-        /// Constructor that receives dependencies via dependency injection.
-        /// </summary>
-        /// <param name="context">The database context instance</param>
-        /// <param name="env">The web hosting environment instance for file system access</param>
-        public MidpointsController(AppDbContext context, IWebHostEnvironment env)
-        {
-            _context = context;
-            _env = env;
-        }
-
-        /// <summary>
-        /// Retrieves all midpoints from the database.
-        /// </summary>
-        /// <returns>
-        /// HTTP 200 OK with a list of all midpoints.
-        /// </returns>
-        /// <remarks>
-        /// Unlike Vaults, midpoints don't have related entities to include, so we use a simple query.
-        /// This is efficient for displaying all midpoints on the map simultaneously.
-        /// </remarks>
-        // GET: api/midpoints
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<Midpoint>>> GetMidpoints()
-        {
-            // Simple query: get all midpoints and return as a list
-            // ToListAsync() executes the query asynchronously
-            return await _context.Midpoints.ToListAsync();
-        }
-
-        /// <summary>
-        /// Creates a new midpoint in the database.
-        /// </summary>
-        /// <param name="midpoint">
-        /// The midpoint object to create. Must include Name, Color, and Location properties.
-        /// </param>
-        /// <returns>
-        /// HTTP 201 Created with the newly created midpoint (including its auto-generated ID).
-        /// Returns HTTP 400 Bad Request if model validation fails.
-        /// </returns>
-        /// <remarks>
-        /// Best Practice: Following REST conventions by returning 201 Created status
-        /// with a Location header pointing to the new resource.
-        /// </remarks>
-        // POST: api/midpoints
-        [HttpPost]
-        public async Task<ActionResult<Midpoint>> PostMidpoint(Midpoint midpoint)
-        {
-            // Add to change tracker (marks entity for insertion)
-            _context.Midpoints.Add(midpoint);
-            
-            // Execute the SQL INSERT statement
-            await _context.SaveChangesAsync();
-            
-            // Return 201 Created with Location header
-            return CreatedAtAction(nameof(GetMidpoints), new { id = midpoint.Id }, midpoint);
-        }
-
-        /// <summary>
-        /// Retrieves a single midpoint by its unique identifier.
-        /// </summary>
-        /// <param name="id">The unique ID of the midpoint to retrieve (from the URL route)</param>
-        /// <returns>
-        /// HTTP 200 OK with the midpoint if found, or HTTP 404 Not Found if the midpoint doesn't exist.
-        /// </returns>
-        /// <remarks>
-        /// FindAsync() is optimized for looking up a single record by primary key.
-        /// It's faster than using .Where() or .FirstOrDefaultAsync() for primary key lookups.
-        /// </remarks>
-        // GET: api/midpoints/5
-        [HttpGet("{id}")]
-        public async Task<ActionResult<Midpoint>> GetMidpoint(int id)
-        {
-            // FindAsync is optimized for primary key lookups (very fast)
-            var midpoint = await _context.Midpoints.FindAsync(id);
-
-            // Return 404 Not Found if the midpoint doesn't exist (standard REST practice)
-            if (midpoint == null)
-            {
-                return NotFound(); // Returns HTTP 404 status code
-            }
-
-            return midpoint; // Returns HTTP 200 OK with the midpoint data
-        }
-
-        /// <summary>
-        /// Updates an existing midpoint's properties (name, status, description).
-        /// Does not update the Location property - midpoints cannot be moved after creation.
-        /// </summary>
-        /// <param name="id">The unique ID of the midpoint to update (from the URL route)</param>
-        /// <param name="midpoint">
-        /// The updated midpoint data. Only Name, Status, and Description properties are updated.
-        /// The Location property is ignored to prevent accidental movement of midpoints.
-        /// </param>
-        /// <returns>
-        /// HTTP 204 No Content if successfully updated, HTTP 400 Bad Request if the ID doesn't match,
-        /// or HTTP 404 Not Found if the midpoint doesn't exist.
-        /// </returns>
-        /// <remarks>
-        /// RESTful Best Practice: PUT operations typically return 204 No Content (success with no body)
-        /// when the update is successful, as the client already knows what was sent.
-        /// 
-        /// This method uses a partial update pattern - only the provided properties are updated.
-        /// The Location property is explicitly preserved to prevent midpoints from being moved.
-        /// 
-        /// Entity Framework's Update() method marks all properties as modified, so we manually
-        /// set only the properties we want to allow editing.
-        /// </remarks>
-        // PUT: api/midpoints/5
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutMidpoint(int id, Midpoint midpoint)
-        {
-            // Ensure the ID in the URL matches the ID in the request body
-            if (id != midpoint.Id)
-            {
-                return BadRequest("The ID in the URL does not match the ID in the request body.");
-            }
-
-            // Find the existing midpoint in the database
-            var existingMidpoint = await _context.Midpoints.FindAsync(id);
-            if (existingMidpoint == null)
-            {
-                return NotFound();
-            }
-
-            // Update the editable properties (including Location for drag-and-drop support)
-            existingMidpoint.Name = midpoint.Name;
-            existingMidpoint.Status = midpoint.Status;
-            existingMidpoint.Description = midpoint.Description;
-            existingMidpoint.Location = midpoint.Location; // Allow location updates for drag-and-drop
-            
-            // Update Color property to match the new Status
-            existingMidpoint.Color = GetStatusColor(midpoint.Status);
-
-            // Mark the entity as modified so Entity Framework knows to update it
-            _context.Entry(existingMidpoint).State = EntityState.Modified;
-
-            try
-            {
-                // Execute the SQL UPDATE statement
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                // Handle concurrency conflicts (if another user modified the midpoint simultaneously)
-                if (!await _context.Midpoints.AnyAsync(e => e.Id == id))
-                {
-                    return NotFound();
-                }
-                throw; // Re-throw if it's a different concurrency issue
-            }
-
-            // Return 204 No Content (successful update with no response body)
-            return NoContent();
-        }
-
-        /// <summary>
-        /// Deletes a midpoint from the database by its unique identifier.
-        /// </summary>
-        /// <param name="id">The unique ID of the midpoint to delete (from the URL route)</param>
-        /// <returns>
-        /// HTTP 204 No Content if successfully deleted, or HTTP 404 Not Found if the midpoint doesn't exist.
-        /// </returns>
-        /// <remarks>
-        /// RESTful Best Practice: DELETE operations typically return 204 No Content (success with no body)
-        /// rather than 200 OK, because there's nothing meaningful to return after deletion.
-        /// </remarks>
-        /// <summary>
-        /// Deletes a midpoint from the database and removes all associated photo files from the file system.
-        /// </summary>
-        /// <param name="id">The unique ID of the midpoint to delete (from the URL route)</param>
-        /// <returns>
-        /// HTTP 204 No Content if successfully deleted, or HTTP 404 Not Found if the midpoint doesn't exist.
-        /// </returns>
-        /// <remarks>
-        /// This method:
-        /// 1. Finds all photos associated with the midpoint
-        /// 2. Deletes the physical photo files from the wwwroot/uploads directory
-        /// 3. Deletes the midpoint (cascade delete will automatically remove photo records from the database)
-        /// 
-        /// RESTful Best Practice: DELETE operations typically return 204 No Content (success with no body)
-        /// rather than 200 OK, because there's nothing meaningful to return after deletion.
-        /// </remarks>
-        // DELETE: api/midpoints/5
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteMidpoint(int id)
-        {
-            // Find the midpoint by primary key, including its photos
-            var midpoint = await _context.Midpoints
-                .Include(m => m.Photos) // Eagerly load photos so we can delete the files
-                .FirstOrDefaultAsync(m => m.Id == id);
-            
-            // Return 404 if not found (standard REST practice)
-            if (midpoint == null)
-                return NotFound();
-
-            // Delete all photo files from the file system before deleting the midpoint
-            string uploadPath = Path.Combine(_env.WebRootPath, "uploads");
-            foreach (var photo in midpoint.Photos)
-            {
-                string filePath = Path.Combine(uploadPath, photo.FileName);
-                if (System.IO.File.Exists(filePath))
-                {
-                    try
-                    {
-                        System.IO.File.Delete(filePath);
-                    }
-                    catch (Exception ex)
-                    {
-                        // Log the error but continue with deletion
-                        // The database record will still be deleted via cascade delete
-                        Console.WriteLine($"Warning: Could not delete photo file {photo.FileName}: {ex.Message}");
-                    }
-                }
-            }
-
-            // Mark the entity for deletion
-            // Cascade delete will automatically remove photo records from the database
-            _context.Midpoints.Remove(midpoint);
-            
-            // Execute the SQL DELETE statement (cascade delete handles photo records)
-            await _context.SaveChangesAsync();
-            
-            // Return 204 No Content (successful deletion with no response body)
-            return NoContent();
-        }
-
-        /// <summary>
-        /// Helper method to get the color name string based on the midpoint status.
-        /// Maps status colors: New (black), Review (light gray), Complete (light green), Issue (light red).
-        /// </summary>
-        /// <param name="status">The midpoint status to get the color for</param>
-        /// <returns>A color name string that matches the status marker color</returns>
-        private static string GetStatusColor(MidpointStatus status)
-        {
-            return status switch
-            {
-                MidpointStatus.New => "Black",
-                MidpointStatus.Review => "LightGray",
-                MidpointStatus.Complete => "LightGreen",
-                MidpointStatus.Issue => "LightCoral",
-                _ => "Black" // Default to black
-            };
-        }
+        return await _context.Midpoints.ToListAsync();
     }
+
+    /// <summary>
+    /// Gets a single midpoint by ID.
+    /// </summary>
+    [HttpGet("{id}")]
+    public async Task<ActionResult<Midpoint>> GetMidpoint(int id)
+    {
+        var midpoint = await _context.Midpoints.FindAsync(id);
+
+        if (midpoint == null)
+            return NotFound();
+
+        return midpoint;
+    }
+
+    /// <summary>
+    /// Creates a new midpoint.
+    /// </summary>
+    [HttpPost]
+    public async Task<ActionResult<Midpoint>> PostMidpoint(Midpoint midpoint)
+    {
+        _context.Midpoints.Add(midpoint);
+        await _context.SaveChangesAsync();
+
+        return CreatedAtAction(nameof(GetMidpoints), new { id = midpoint.Id }, midpoint);
+    }
+
+    /// <summary>
+    /// Updates an existing midpoint.
+    /// </summary>
+    [HttpPut("{id}")]
+    public async Task<IActionResult> PutMidpoint(int id, Midpoint midpoint)
+    {
+        if (id != midpoint.Id)
+            return BadRequest("ID mismatch.");
+
+        var existingMidpoint = await _context.Midpoints.FindAsync(id);
+        if (existingMidpoint == null)
+            return NotFound();
+
+        existingMidpoint.Name = midpoint.Name;
+        existingMidpoint.Status = midpoint.Status;
+        existingMidpoint.Description = midpoint.Description;
+        existingMidpoint.Location = midpoint.Location;
+        existingMidpoint.Color = GetStatusColor(midpoint.Status);
+
+        _context.Entry(existingMidpoint).State = EntityState.Modified;
+
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            if (!await _context.Midpoints.AnyAsync(e => e.Id == id))
+                return NotFound();
+            throw;
+        }
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Deletes a midpoint and its associated photos.
+    /// </summary>
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteMidpoint(int id)
+    {
+        var midpoint = await _context.Midpoints
+            .Include(m => m.Photos)
+            .FirstOrDefaultAsync(m => m.Id == id);
+
+        if (midpoint == null)
+            return NotFound();
+
+        // Delete photo files from disk
+        string uploadPath = Path.Combine(_env.WebRootPath, "uploads");
+        foreach (var photo in midpoint.Photos)
+        {
+            string filePath = Path.Combine(uploadPath, photo.FileName);
+            if (System.IO.File.Exists(filePath))
+            {
+                try { System.IO.File.Delete(filePath); }
+                catch (Exception ex) { Console.WriteLine($"Warning: Could not delete {photo.FileName}: {ex.Message}"); }
+            }
+        }
+
+        _context.Midpoints.Remove(midpoint);
+        await _context.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Maps midpoint status to marker color.
+    /// </summary>
+    private static string GetStatusColor(MidpointStatus status) => status switch
+    {
+        MidpointStatus.New => "Black",
+        MidpointStatus.Review => "LightGray",
+        MidpointStatus.Complete => "LightGreen",
+        MidpointStatus.Issue => "LightCoral",
+        _ => "Black"
+    };
 }
