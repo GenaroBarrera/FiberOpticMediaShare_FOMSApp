@@ -6,6 +6,9 @@
 # dotenv files
 .env
 
+# Cursor IDE rules (keep local, don't push to repo)
+.cursorrules
+
 # User-specific files
 *.rsuser
 *.suo
