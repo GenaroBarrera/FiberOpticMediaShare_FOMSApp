@@ -137,29 +137,38 @@ else
         <div class="card-body">
 
             <div class="mb-3">
-                <label>Select a photo to upload:</label>
+                <label>Select photos to upload (you can select multiple):</label>
                 <div class="input-group">
-                    <InputFile OnChange="@OnFileSelected" class="form-control" accept=".jpg,.jpeg,.png" @ref="fileInput" />
+                    <InputFile OnChange="@OnFilesSelected" class="form-control" accept=".jpg,.jpeg,.png" multiple @ref="fileInput" />
                 </div>
-                @if (selectedFile != null)
+                @if (selectedFiles != null && selectedFiles.Count > 0)
                 {
                     <div class="mt-2">
                         <p class="mb-2">
-                            <strong>Selected file:</strong> @selectedFile.Name 
-                            <span class="text-muted">(@(selectedFile.Size / 1024) KB)</span>
+                            <strong>Selected files:</strong> @selectedFiles.Count file(s)
+                            <span class="text-muted">(@(selectedFiles.Sum(f => f.Size) / 1024) KB total)</span>
                         </p>
-                        <button type="button" class="btn btn-primary" @onclick="UploadSelectedPhoto" disabled="@(isUploading)">
+                        <ul class="list-group list-group-flush mb-2" style="max-height: 150px; overflow-y: auto;">
+                            @foreach (var file in selectedFiles)
+                            {
+                                <li class="list-group-item py-1 px-2 d-flex justify-content-between align-items-center">
+                                    <span>@file.Name</span>
+                                    <span class="badge bg-secondary">@(file.Size / 1024) KB</span>
+                                </li>
+                            }
+                        </ul>
+                        <button type="button" class="btn btn-primary" @onclick="UploadSelectedPhotos" disabled="@(isUploading)">
                             @if (isUploading)
                             {
                                 <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                                <text>Uploading...</text>
+                                <text>Uploading @uploadProgress of @selectedFiles.Count...</text>
                             }
                             else
                             {
-                                <text>Upload Photo</text>
+                                <text>Upload @selectedFiles.Count Photo(s)</text>
                             }
                         </button>
-                        <button type="button" class="btn btn-outline-secondary ms-2" @onclick="ClearSelectedFile">Cancel</button>
+                        <button type="button" class="btn btn-outline-secondary ms-2" @onclick="ClearSelectedFiles" disabled="@isUploading">Cancel</button>
                     </div>
                 }
             </div>
@@ -248,10 +257,16 @@ else
     private InputFile? fileInput;
 
     /// <summary>
-    /// Stores the currently selected file before upload.
-    /// This allows users to browse and select a file, then upload it with a separate button.
+    /// Stores the currently selected files before upload.
+    /// This allows users to browse and select multiple files, then upload them with a separate button.
     /// </summary>
-    private IBrowserFile? selectedFile;
+    private List<IBrowserFile> selectedFiles = new();
+
+    /// <summary>
+    /// Tracks the current upload progress when uploading multiple files.
+    /// Displays which file number is currently being uploaded (e.g., "2 of 5").
+    /// </summary>
+    private int uploadProgress = 0;
 
     /// <summary>
     /// Indicates whether a photo upload is currently in progress.
@@ -423,79 +438,112 @@ else
     }
 
     /// <summary>
-    /// Handles file selection when the user browses for a file.
-    /// Stores the selected file but does not upload it yet.
+    /// Handles file selection when the user browses for files.
+    /// Stores the selected files but does not upload them yet.
+    /// Supports multiple file selection.
     /// </summary>
-    /// <param name="e">Event arguments containing the selected file</param>
-    private void OnFileSelected(InputFileChangeEventArgs e)
+    /// <param name="e">Event arguments containing the selected files</param>
+    private void OnFilesSelected(InputFileChangeEventArgs e)
     {
-        // Store the selected file for later upload
-        selectedFile = e.File;
+        // Store all selected files for later upload (limit to 20 files at once to prevent issues)
+        selectedFiles = e.GetMultipleFiles(maximumFileCount: 20).ToList();
         
-        // Trigger UI update to show the selected file name
+        // Trigger UI update to show the selected file names
         StateHasChanged();
     }
 
     /// <summary>
-    /// Clears the selected file without uploading it.
-    /// Allows users to cancel and select a different file.
+    /// Clears the selected files without uploading them.
+    /// Allows users to cancel and select different files.
     /// </summary>
-    private void ClearSelectedFile()
+    private void ClearSelectedFiles()
     {
-        selectedFile = null;
+        selectedFiles.Clear();
+        uploadProgress = 0;
         StateHasChanged();
     }
 
     /// <summary>
-    /// Uploads the previously selected photo file to the server.
-    /// This method is called when the user clicks the "Upload Photo" button.
+    /// Uploads all previously selected photo files to the server.
+    /// This method is called when the user clicks the "Upload Photo(s)" button.
+    /// Files are uploaded sequentially to provide progress feedback.
     /// </summary>
-    private async Task UploadSelectedPhoto()
+    private async Task UploadSelectedPhotos()
     {
-        if (selectedFile == null)
+        if (selectedFiles.Count == 0)
         {
             return;
         }
 
         isUploading = true;
+        uploadProgress = 0;
         StateHasChanged();
+
+        int successCount = 0;
+        int failCount = 0;
+        var failedFiles = new List<string>();
 
         try
         {
-            // Create a specialized "content" container for sending files
-            using var content = new MultipartFormDataContent();
-
-            // We must resize/limit the file stream to prevent massive uploads crashing the browser
-            // Allow up to 20MB (20 * 1024 * 1024 bytes) - reasonable for high-resolution construction photos
-            // This limit prevents browser memory issues while allowing quality photos
-            var fileContent = new StreamContent(selectedFile.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024));
-            fileContent.Headers.ContentType = new MediaTypeHeaderValue(selectedFile.ContentType);
-
-            content.Add(content: fileContent, name: "file", fileName: selectedFile.Name);
-            content.Add(content: new StringContent(Id.ToString()), name: "midpointId");
-
-            // Send to API
-            var response = await Http.PostAsync("api/photos", content);
-
-            if (response.IsSuccessStatusCode)
+            foreach (var file in selectedFiles)
             {
-                // Clear the selected file
-                selectedFile = null;
-                
-                // Refresh the list so the new photo appears instantly
-                await LoadPhotos();
+                uploadProgress++;
+                StateHasChanged();
+
+                try
+                {
+                    // Create a specialized "content" container for sending files
+                    using var content = new MultipartFormDataContent();
+
+                    // We must resize/limit the file stream to prevent massive uploads crashing the browser
+                    // Allow up to 20MB (20 * 1024 * 1024 bytes) - reasonable for high-resolution construction photos
+                    // This limit prevents browser memory issues while allowing quality photos
+                    var fileContent = new StreamContent(file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024));
+                    fileContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
+
+                    content.Add(content: fileContent, name: "file", fileName: file.Name);
+                    content.Add(content: new StringContent(Id.ToString()), name: "midpointId");
+
+                    // Send to API
+                    var response = await Http.PostAsync("api/photos", content);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        successCount++;
+                    }
+                    else
+                    {
+                        failCount++;
+                        failedFiles.Add(file.Name);
+                        var errorMessage = await response.Content.ReadAsStringAsync();
+                        Console.WriteLine($"Upload failed for {file.Name}: {errorMessage}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    failCount++;
+                    failedFiles.Add(file.Name);
+                    Console.WriteLine($"Error uploading {file.Name}: {ex.Message}");
+                }
             }
-            else
+
+            // Clear the selected files after all uploads are complete
+            selectedFiles.Clear();
+            uploadProgress = 0;
+            
+            // Refresh the list so the new photos appear instantly
+            await LoadPhotos();
+
+            // Show summary message if there were any failures
+            if (failCount > 0)
             {
-                var errorMessage = await response.Content.ReadAsStringAsync();
-                Console.WriteLine($"Upload failed: {errorMessage}");
-                await JS.InvokeVoidAsync("alert", $"Upload failed: {errorMessage}");
+                await JS.InvokeVoidAsync("alert", $"Upload complete: {successCount} succeeded, {failCount} failed.\nFailed files: {string.Join(", ", failedFiles)}");
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error uploading photo: {ex.Message}");
-            await JS.InvokeVoidAsync("alert", $"Error uploading photo: {ex.Message}");
+            Console.WriteLine($"Error during batch upload: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Error during upload: {ex.Message}");
         }
         finally
         {
