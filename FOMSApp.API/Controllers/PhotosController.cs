@@ -6,9 +6,7 @@ using System.IO.Compression;
 
 namespace FOMSApp.API.Controllers;
 
-/// <summary>
-/// API controller for photo uploads and management.
-/// </summary>
+// API controller for photo uploads and management.
 [Route("api/[controller]")]
 [ApiController]
 public class PhotosController(AppDbContext context, IWebHostEnvironment env) : ControllerBase
@@ -16,9 +14,7 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env) : C
     private readonly AppDbContext _context = context;
     private readonly IWebHostEnvironment _env = env;
 
-    /// <summary>
-    /// Gets all photos for a specific vault.
-    /// </summary>
+    // GET: api/photos/vault/{vaultId} - Gets all photos for a specific vault.
     [HttpGet("vault/{vaultId}")]
     public async Task<ActionResult<IEnumerable<Photo>>> GetPhotosForVault(int vaultId)
     {
@@ -27,9 +23,7 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env) : C
             .ToListAsync();
     }
 
-    /// <summary>
-    /// Gets all photos for a specific midpoint.
-    /// </summary>
+    // GET: api/photos/midpoint/{midpointId} - Gets all photos for a specific midpoint.
     [HttpGet("midpoint/{midpointId}")]
     public async Task<ActionResult<IEnumerable<Photo>>> GetPhotosForMidpoint(int midpointId)
     {
@@ -38,9 +32,7 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env) : C
             .ToListAsync();
     }
 
-    /// <summary>
-    /// Uploads a photo file and creates a database record.
-    /// </summary>
+    // POST: api/photos - Uploads a photo file and creates a database record.
     [HttpPost]
     public async Task<ActionResult<Photo>> UploadPhoto([FromForm] PhotoUploadDto upload)
     {
@@ -77,9 +69,7 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env) : C
         return Ok(photo);
     }
 
-    /// <summary>
-    /// Downloads all photos for a vault as a ZIP file.
-    /// </summary>
+    // GET: api/photos/vault/{vaultId}/download - Downloads all photos for a vault as a ZIP file.
     [HttpGet("vault/{vaultId}/download")]
     public async Task<IActionResult> DownloadVaultPhotos(int vaultId)
     {
@@ -112,9 +102,7 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env) : C
         return File(memoryStream.ToArray(), "application/zip", $"{safeVaultName}_Photos.zip");
     }
 
-    /// <summary>
-    /// Downloads all photos for a midpoint as a ZIP file.
-    /// </summary>
+    // GET: api/photos/midpoint/{midpointId}/download - Downloads all photos for a midpoint as a ZIP file.
     [HttpGet("midpoint/{midpointId}/download")]
     public async Task<IActionResult> DownloadMidpointPhotos(int midpointId)
     {
@@ -147,9 +135,7 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env) : C
         return File(memoryStream.ToArray(), "application/zip", $"{safeMidpointName}_Photos.zip");
     }
 
-    /// <summary>
-    /// Downloads photos for multiple vaults/midpoints as a single ZIP file.
-    /// </summary>
+    // GET: api/photos/batch-download - Downloads photos for multiple vaults/midpoints as a single ZIP file.
     [HttpGet("batch-download")]
     public async Task<IActionResult> BatchDownloadPhotos([FromQuery] string? vaultIds, [FromQuery] string? midpointIds)
     {
@@ -162,7 +148,6 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env) : C
         using var memoryStream = new MemoryStream();
         using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, true))
         {
-            // Process vaults
             foreach (var vaultId in vaultIdList)
             {
                 var photos = await _context.Photos.Where(p => p.VaultId == vaultId).ToListAsync();
@@ -174,7 +159,6 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env) : C
                 }
             }
 
-            // Process midpoints
             foreach (var midpointId in midpointIdList)
             {
                 var photos = await _context.Photos.Where(p => p.MidpointId == midpointId).ToListAsync();
@@ -194,9 +178,7 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env) : C
         return File(memoryStream.ToArray(), "application/zip", zipFileName);
     }
 
-    /// <summary>
-    /// Deletes a photo from the database and file system.
-    /// </summary>
+    // DELETE: api/photos/{id} - Deletes a photo from the database and file system.
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeletePhoto(int id)
     {
@@ -247,9 +229,7 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env) : C
     }
 }
 
-/// <summary>
-/// DTO for photo uploads. Either VaultId or MidpointId must be provided.
-/// </summary>
+// DTO for photo uploads. Either VaultId or MidpointId must be provided.
 public class PhotoUploadDto
 {
     public int? VaultId { get; set; }

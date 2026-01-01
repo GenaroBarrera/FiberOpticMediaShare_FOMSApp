@@ -5,27 +5,21 @@ using FOMSApp.Shared.Models;
 
 namespace FOMSApp.API.Controllers;
 
-/// <summary>
-/// API controller for cable route CRUD operations.
-/// </summary>
+// API controller for cable route CRUD operations.
 [Route("api/[controller]")]
 [ApiController]
 public class CablesController(AppDbContext context) : ControllerBase
 {
     private readonly AppDbContext _context = context;
 
-    /// <summary>
-    /// Gets all cable routes.
-    /// </summary>
+    // GET: api/cables - Gets all cable routes.
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Cable>>> GetCables()
     {
         return await _context.Cables.ToListAsync();
     }
 
-    /// <summary>
-    /// Gets a single cable by ID.
-    /// </summary>
+    // GET: api/cables/{id} - Gets a single cable by ID.
     [HttpGet("{id}")]
     public async Task<ActionResult<Cable>> GetCable(int id)
     {
@@ -37,9 +31,7 @@ public class CablesController(AppDbContext context) : ControllerBase
         return cable;
     }
 
-    /// <summary>
-    /// Creates a new cable route.
-    /// </summary>
+    // POST: api/cables - Creates a new cable route.
     [HttpPost]
     public async Task<ActionResult<Cable>> PostCable(Cable cable)
     {
@@ -49,9 +41,7 @@ public class CablesController(AppDbContext context) : ControllerBase
         return CreatedAtAction(nameof(GetCables), new { id = cable.Id }, cable);
     }
 
-    /// <summary>
-    /// Updates an existing cable route.
-    /// </summary>
+    // PUT: api/cables/{id} - Updates an existing cable route.
     [HttpPut("{id}")]
     public async Task<IActionResult> PutCable(int id, Cable cable)
     {
@@ -83,9 +73,7 @@ public class CablesController(AppDbContext context) : ControllerBase
         return NoContent();
     }
 
-    /// <summary>
-    /// Deletes a cable route.
-    /// </summary>
+    // DELETE: api/cables/{id} - Deletes a cable route.
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteCable(int id)
     {

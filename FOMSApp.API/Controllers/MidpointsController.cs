@@ -5,9 +5,7 @@ using FOMSApp.Shared.Models;
 
 namespace FOMSApp.API.Controllers;
 
-/// <summary>
-/// API controller for midpoint CRUD operations.
-/// </summary>
+// API controller for midpoint CRUD operations.
 [Route("api/[controller]")]
 [ApiController]
 public class MidpointsController(AppDbContext context, IWebHostEnvironment env) : ControllerBase
@@ -15,18 +13,14 @@ public class MidpointsController(AppDbContext context, IWebHostEnvironment env) 
     private readonly AppDbContext _context = context;
     private readonly IWebHostEnvironment _env = env;
 
-    /// <summary>
-    /// Gets all midpoints.
-    /// </summary>
+    // GET: api/midpoints - Gets all midpoints.
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Midpoint>>> GetMidpoints()
     {
         return await _context.Midpoints.ToListAsync();
     }
 
-    /// <summary>
-    /// Gets a single midpoint by ID.
-    /// </summary>
+    // GET: api/midpoints/{id} - Gets a single midpoint by ID.
     [HttpGet("{id}")]
     public async Task<ActionResult<Midpoint>> GetMidpoint(int id)
     {
@@ -38,9 +32,7 @@ public class MidpointsController(AppDbContext context, IWebHostEnvironment env) 
         return midpoint;
     }
 
-    /// <summary>
-    /// Creates a new midpoint.
-    /// </summary>
+    // POST: api/midpoints - Creates a new midpoint.
     [HttpPost]
     public async Task<ActionResult<Midpoint>> PostMidpoint(Midpoint midpoint)
     {
@@ -50,9 +42,7 @@ public class MidpointsController(AppDbContext context, IWebHostEnvironment env) 
         return CreatedAtAction(nameof(GetMidpoints), new { id = midpoint.Id }, midpoint);
     }
 
-    /// <summary>
-    /// Updates an existing midpoint.
-    /// </summary>
+    // PUT: api/midpoints/{id} - Updates an existing midpoint.
     [HttpPut("{id}")]
     public async Task<IActionResult> PutMidpoint(int id, Midpoint midpoint)
     {
@@ -85,9 +75,7 @@ public class MidpointsController(AppDbContext context, IWebHostEnvironment env) 
         return NoContent();
     }
 
-    /// <summary>
-    /// Deletes a midpoint and its associated photos.
-    /// </summary>
+    // DELETE: api/midpoints/{id} - Deletes a midpoint and its associated photos.
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteMidpoint(int id)
     {
@@ -116,9 +104,7 @@ public class MidpointsController(AppDbContext context, IWebHostEnvironment env) 
         return NoContent();
     }
 
-    /// <summary>
-    /// Maps midpoint status to marker color.
-    /// </summary>
+    // Maps midpoint status to marker color.
     private static string GetStatusColor(MidpointStatus status) => status switch
     {
         MidpointStatus.New => "Black",

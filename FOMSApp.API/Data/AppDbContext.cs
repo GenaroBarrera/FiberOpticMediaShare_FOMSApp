@@ -3,9 +3,7 @@ using FOMSApp.Shared.Models;
 
 namespace FOMSApp.API.Data;
 
-/// <summary>
-/// Database context for the FOMS application.
-/// </summary>
+// Database context for the FOMS application.
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
     public DbSet<Vault> Vaults { get; set; } = null!;

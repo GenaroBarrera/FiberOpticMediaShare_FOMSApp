@@ -5,9 +5,7 @@ using FOMSApp.Shared.Models;
 
 namespace FOMSApp.API.Controllers;
 
-/// <summary>
-/// API controller for vault CRUD operations.
-/// </summary>
+// API controller for vault CRUD operations.
 [Route("api/[controller]")]
 [ApiController]
 public class VaultsController(AppDbContext context, IWebHostEnvironment env) : ControllerBase
@@ -15,9 +13,7 @@ public class VaultsController(AppDbContext context, IWebHostEnvironment env) : C
     private readonly AppDbContext _context = context;
     private readonly IWebHostEnvironment _env = env;
 
-    /// <summary>
-    /// Gets all vaults with their associated photos.
-    /// </summary>
+    // GET: api/vaults - Gets all vaults with their associated photos.
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Vault>>> GetVaults()
     {
@@ -26,9 +22,7 @@ public class VaultsController(AppDbContext context, IWebHostEnvironment env) : C
             .ToListAsync();
     }
 
-    /// <summary>
-    /// Gets a single vault by ID.
-    /// </summary>
+    // GET: api/vaults/{id} - Gets a single vault by ID.
     [HttpGet("{id}")]
     public async Task<ActionResult<Vault>> GetVault(int id)
     {
@@ -40,9 +34,7 @@ public class VaultsController(AppDbContext context, IWebHostEnvironment env) : C
         return vault;
     }
 
-    /// <summary>
-    /// Creates a new vault.
-    /// </summary>
+    // POST: api/vaults - Creates a new vault.
     [HttpPost]
     public async Task<ActionResult<Vault>> PostVault(Vault vault)
     {
@@ -52,9 +44,7 @@ public class VaultsController(AppDbContext context, IWebHostEnvironment env) : C
         return CreatedAtAction(nameof(GetVault), new { id = vault.Id }, vault);
     }
 
-    /// <summary>
-    /// Updates an existing vault.
-    /// </summary>
+    // PUT: api/vaults/{id} - Updates an existing vault.
     [HttpPut("{id}")]
     public async Task<IActionResult> PutVault(int id, Vault vault)
     {
@@ -87,9 +77,7 @@ public class VaultsController(AppDbContext context, IWebHostEnvironment env) : C
         return NoContent();
     }
 
-    /// <summary>
-    /// Deletes a vault and its associated photos.
-    /// </summary>
+    // DELETE: api/vaults/{id} - Deletes a vault and its associated photos.
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteVault(int id)
     {
@@ -118,9 +106,7 @@ public class VaultsController(AppDbContext context, IWebHostEnvironment env) : C
         return NoContent();
     }
 
-    /// <summary>
-    /// Maps vault status to marker color.
-    /// </summary>
+    // Maps vault status to marker color.
     private static string GetStatusColor(VaultStatus status) => status switch
     {
         VaultStatus.New => "Blue",
