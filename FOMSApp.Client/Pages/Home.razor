@@ -2941,38 +2941,46 @@ else
                         var vaultResponse = await Http.PostAsJsonAsync("api/vaults", vault, options);
                         if (vaultResponse.IsSuccessStatusCode)
                         {
+                            // Read the created vault from the response to get the correct ID
+                            var restoredVault = await vaultResponse.Content.ReadFromJsonAsync<Vault>(options);
+                            if (restoredVault == null)
+                            {
+                                await JS.InvokeVoidAsync("alert", "Failed to restore vault. Invalid response.");
+                                return;
+                            }
+
                             await LoadVaults();
                             // Re-add vault to map using the same logic as OnAfterRenderAsync
-                            if (vault.Location != null)
+                            if (restoredVault.Location != null)
                             {
                                 List<Photo>? vaultPhotos = null;
                                 try
                                 {
-                                    vaultPhotos = await Http.GetFromJsonAsync<List<Photo>>($"api/photos/vault/{vault.Id}");
+                                    vaultPhotos = await Http.GetFromJsonAsync<List<Photo>>($"api/photos/vault/{restoredVault.Id}");
                                 }
                                 catch { }
 
-                                string descriptionText = string.IsNullOrWhiteSpace(vault.Description) 
+                                string descriptionText = string.IsNullOrWhiteSpace(restoredVault.Description) 
                                     ? "No description provided." 
-                                    : System.Net.WebUtility.HtmlEncode(vault.Description);
-                                string coordinates = $"{vault.Location.Y:F6}, {vault.Location.X:F6}";
-                                string editButtonId = $"editVault_{vault.Id}";
-                                string photosHtml = BuildPhotosHtml(vault.Id, vaultPhotos, "vault");
+                                    : System.Net.WebUtility.HtmlEncode(restoredVault.Description);
+                                string coordinates = $"{restoredVault.Location.Y:F6}, {restoredVault.Location.X:F6}";
+                                string editButtonId = $"editVault_{restoredVault.Id}";
+                                string photosHtml = BuildPhotosHtml(restoredVault.Id, vaultPhotos, "vault");
                                 string popup = $"<div style='font-size: 12px; line-height: 1.6; width: 300px;'>" +
-                                    $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(vault.Name)}<br>" +
+                                    $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(restoredVault.Name)}<br>" +
                                     photosHtml +
-                                    $"<strong>Status:</strong> {vault.Status}<br>" +
+                                    $"<strong>Status:</strong> {restoredVault.Status}<br>" +
                                     $"<strong>Description:</strong> {descriptionText}<br>" +
                                     $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
                                     $"<div style='margin-top: 8px;'>" +
                                     $"<button id='{editButtonId}' class='btn btn-sm btn-primary me-2' style='font-size: 11px; padding: 2px 8px;'>Edit</button>" +
-                                    $"<a href='vault/{vault.Id}' style='font-size: 11px;'>View Details</a>" +
+                                    $"<a href='vault/{restoredVault.Id}' style='font-size: 11px;'>View Details</a>" +
                                     $"</div>" +
                                     $"</div>";
-                                string vaultColor = !string.IsNullOrWhiteSpace(vault.Color) ? vault.Color : GetStatusColor(vault.Status);
-                                var markerRef = await module.InvokeAsync<IJSObjectReference>("addMarker", mapInstance, vault.Location.Y, vault.Location.X, popup, vault.Id, dotNetReference, vaultColor);
-                                mapLayers[$"vault_{vault.Id}"] = markerRef;
-                                await module.InvokeVoidAsync("attachEditButtonHandler", markerRef, editButtonId, "vault", vault.Id, dotNetReference);
+                                string vaultColor = !string.IsNullOrWhiteSpace(restoredVault.Color) ? restoredVault.Color : GetStatusColor(restoredVault.Status);
+                                var markerRef = await module.InvokeAsync<IJSObjectReference>("addMarker", mapInstance, restoredVault.Location.Y, restoredVault.Location.X, popup, restoredVault.Id, dotNetReference, vaultColor);
+                                mapLayers[$"vault_{restoredVault.Id}"] = markerRef;
+                                await module.InvokeVoidAsync("attachEditButtonHandler", markerRef, editButtonId, "vault", restoredVault.Id, dotNetReference);
                             }
                         }
                         else
@@ -2985,39 +2993,47 @@ else
                         var midpointResponse = await Http.PostAsJsonAsync("api/midpoints", midpoint, options);
                         if (midpointResponse.IsSuccessStatusCode)
                         {
+                            // Read the created midpoint from the response to get the correct ID
+                            var restoredMidpoint = await midpointResponse.Content.ReadFromJsonAsync<Midpoint>(options);
+                            if (restoredMidpoint == null)
+                            {
+                                await JS.InvokeVoidAsync("alert", "Failed to restore midpoint. Invalid response.");
+                                return;
+                            }
+
                             await LoadMidpoints();
                             // Re-add midpoint to map using the same logic as OnAfterRenderAsync
-                            if (midpoint.Location != null)
+                            if (restoredMidpoint.Location != null)
                             {
                                 List<Photo>? midpointPhotos = null;
                                 try
                                 {
-                                    midpointPhotos = await Http.GetFromJsonAsync<List<Photo>>($"api/photos/midpoint/{midpoint.Id}");
+                                    midpointPhotos = await Http.GetFromJsonAsync<List<Photo>>($"api/photos/midpoint/{restoredMidpoint.Id}");
                                 }
                                 catch { }
 
-                                string descriptionText = string.IsNullOrWhiteSpace(midpoint.Description) 
+                                string descriptionText = string.IsNullOrWhiteSpace(restoredMidpoint.Description) 
                                     ? "No description provided." 
-                                    : System.Net.WebUtility.HtmlEncode(midpoint.Description);
-                                string coordinates = $"{midpoint.Location.Y:F6}, {midpoint.Location.X:F6}";
-                                string editButtonId = $"editMidpoint_{midpoint.Id}";
-                                string photosHtml = BuildPhotosHtml(midpoint.Id, midpointPhotos, "midpoint");
+                                    : System.Net.WebUtility.HtmlEncode(restoredMidpoint.Description);
+                                string coordinates = $"{restoredMidpoint.Location.Y:F6}, {restoredMidpoint.Location.X:F6}";
+                                string editButtonId = $"editMidpoint_{restoredMidpoint.Id}";
+                                string photosHtml = BuildPhotosHtml(restoredMidpoint.Id, midpointPhotos, "midpoint");
                                 string popup = $"<div style='font-size: 12px; line-height: 1.6; width: 300px;'>" +
-                                    $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(midpoint.Name)}<br>" +
+                                    $"<strong>Name:</strong> {System.Net.WebUtility.HtmlEncode(restoredMidpoint.Name)}<br>" +
                                     photosHtml +
-                                    $"<strong>Status:</strong> {midpoint.Status}<br>" +
+                                    $"<strong>Status:</strong> {restoredMidpoint.Status}<br>" +
                                     $"<strong>Description:</strong> {descriptionText}<br>" +
                                     $"<strong>Coordinates:</strong> {coordinates} (Lat, Lng)<br>" +
                                     $"<div style='margin-top: 8px;'>" +
                                     $"<button id='{editButtonId}' class='btn btn-sm btn-primary me-2' style='font-size: 11px; padding: 2px 8px;'>Edit</button>" +
-                                    $"<a href='midpoint/{midpoint.Id}' style='font-size: 11px;'>View Details</a>" +
+                                    $"<a href='midpoint/{restoredMidpoint.Id}' style='font-size: 11px;'>View Details</a>" +
                                     $"</div>" +
                                     $"</div>";
-                                string midpointColor = !string.IsNullOrWhiteSpace(midpoint.Color) ? midpoint.Color : GetMidpointStatusColor(midpoint.Status);
-                                bool isSelected = selectedMidpointIds.Contains(midpoint.Id);
-                                var circleRef = await module.InvokeAsync<IJSObjectReference>("addCircle", mapInstance, midpoint.Location.Y, midpoint.Location.X, midpointColor, popup, midpoint.Id, dotNetReference, isSelected);
-                                mapLayers[$"midpoint_{midpoint.Id}"] = circleRef;
-                                await module.InvokeVoidAsync("attachEditButtonHandler", circleRef, editButtonId, "midpoint", midpoint.Id, dotNetReference);
+                                string midpointColor = !string.IsNullOrWhiteSpace(restoredMidpoint.Color) ? restoredMidpoint.Color : GetMidpointStatusColor(restoredMidpoint.Status);
+                                bool isSelected = selectedMidpointIds.Contains(restoredMidpoint.Id);
+                                var circleRef = await module.InvokeAsync<IJSObjectReference>("addCircle", mapInstance, restoredMidpoint.Location.Y, restoredMidpoint.Location.X, midpointColor, popup, restoredMidpoint.Id, dotNetReference, isSelected);
+                                mapLayers[$"midpoint_{restoredMidpoint.Id}"] = circleRef;
+                                await module.InvokeVoidAsync("attachEditButtonHandler", circleRef, editButtonId, "midpoint", restoredMidpoint.Id, dotNetReference);
                             }
                         }
                         else
@@ -3030,11 +3046,19 @@ else
                         var cableResponse = await Http.PostAsJsonAsync("api/cables", cable, options);
                         if (cableResponse.IsSuccessStatusCode)
                         {
+                            // Read the created cable from the response to get the correct ID
+                            var restoredCable = await cableResponse.Content.ReadFromJsonAsync<Cable>(options);
+                            if (restoredCable == null)
+                            {
+                                await JS.InvokeVoidAsync("alert", "Failed to restore cable. Invalid response.");
+                                return;
+                            }
+
                             await LoadCables();
                             // Re-add cable to map
-                            if (cable.Path != null)
+                            if (restoredCable.Path != null)
                             {
-                                await DrawCableWithVertices(cable);
+                                await DrawCableWithVertices(restoredCable);
                             }
                         }
                         else
