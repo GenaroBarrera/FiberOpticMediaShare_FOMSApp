@@ -1,0 +1,47 @@
+name: Build and Deploy to Azure
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  AZURE_WEBAPP_NAME: fomsapp-api    # Set this to your Azure App Service name
+  DOTNET_VERSION: '9.0.x'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Restore dependencies
+      run: dotnet restore
+      working-directory: ./FOMSApp.API
+
+    - name: Build
+      run: dotnet build --no-restore --configuration Release
+      working-directory: ./FOMSApp.API
+
+    - name: Publish
+      run: dotnet publish --no-build --configuration Release --output ./publish
+      working-directory: ./FOMSApp.API
+
+    - name: Deploy to Azure Web App
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      uses: azure/webapps-deploy@v3
+      with:
+        app-name: ${{ env.AZURE_WEBAPP_NAME }}
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        package: ./FOMSApp.API/publish

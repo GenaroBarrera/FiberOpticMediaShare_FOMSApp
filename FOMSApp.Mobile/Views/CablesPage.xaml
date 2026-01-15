@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="FOMSApp.Mobile.Views.CablesPage"
+             Title="Cables">
+    <ContentPage.Content>
+        <VerticalStackLayout Padding="10">
+            <Label 
+                Text="Cables"
+                FontSize="24"
+                FontAttributes="Bold"
+                HorizontalOptions="Center" />
+            <Label 
+                Text="Cable list will be displayed here"
+                HorizontalOptions="Center"
+                VerticalOptions="CenterAndExpand" />
+        </VerticalStackLayout>
+    </ContentPage.Content>
+</ContentPage>

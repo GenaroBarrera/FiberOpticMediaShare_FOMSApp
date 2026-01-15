@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using FOMSApp.API.Data;
+using FOMSApp.API.Services;
 using FOMSApp.Shared.Models;
 using System.IO.Compression;
 
@@ -9,10 +10,10 @@ namespace FOMSApp.API.Controllers;
 // API controller for photo uploads and management.
 [Route("api/[controller]")]
 [ApiController]
-public class PhotosController(AppDbContext context, IWebHostEnvironment env) : ControllerBase
+public class PhotosController(AppDbContext context, BlobStorageService blobStorage) : ControllerBase
 {
     private readonly AppDbContext _context = context;
-    private readonly IWebHostEnvironment _env = env;
+    private readonly BlobStorageService _blobStorage = blobStorage;
 
     // GET: api/photos/vault/{vaultId} - Gets all photos for a specific vault.
     [HttpGet("vault/{vaultId}")]
@@ -43,16 +44,11 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env) : C
             (!upload.VaultId.HasValue && !upload.MidpointId.HasValue))
             return BadRequest("Provide either VaultId or MidpointId, not both.");
 
-        string uploadPath = Path.Combine(_env.WebRootPath, "uploads");
-        if (!Directory.Exists(uploadPath))
-            Directory.CreateDirectory(uploadPath);
-
         string uniqueFileName = Guid.NewGuid().ToString() + Path.GetExtension(upload.File.FileName);
-        string fullPath = Path.Combine(uploadPath, uniqueFileName);
 
-        using (var stream = new FileStream(fullPath, FileMode.Create))
+        using (var stream = upload.File.OpenReadStream())
         {
-            await upload.File.CopyToAsync(stream);
+            await _blobStorage.UploadFileAsync(stream, uniqueFileName);
         }
 
         var photo = new Photo
@@ -87,13 +83,13 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env) : C
         {
             foreach (var photo in photos)
             {
-                string filePath = Path.Combine(_env.WebRootPath, "uploads", photo.FileName);
-                if (System.IO.File.Exists(filePath))
+                var fileStream = await _blobStorage.DownloadFileAsync(photo.FileName);
+                if (fileStream != null)
                 {
                     var entry = archive.CreateEntry($"{photo.Id}_{photo.FileName}");
                     using var entryStream = entry.Open();
-                    using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
                     await fileStream.CopyToAsync(entryStream);
+                    await fileStream.DisposeAsync();
                 }
             }
         }
@@ -120,13 +116,13 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env) : C
         {
             foreach (var photo in photos)
             {
-                string filePath = Path.Combine(_env.WebRootPath, "uploads", photo.FileName);
-                if (System.IO.File.Exists(filePath))
+                var fileStream = await _blobStorage.DownloadFileAsync(photo.FileName);
+                if (fileStream != null)
                 {
                     var entry = archive.CreateEntry($"{photo.Id}_{photo.FileName}");
                     using var entryStream = entry.Open();
-                    using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
                     await fileStream.CopyToAsync(entryStream);
+                    await fileStream.DisposeAsync();
                 }
             }
         }
@@ -178,7 +174,7 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env) : C
         return File(memoryStream.ToArray(), "application/zip", zipFileName);
     }
 
-    // DELETE: api/photos/{id} - Deletes a photo from the database and file system.
+    // DELETE: api/photos/{id} - Deletes a photo from the database and blob storage.
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeletePhoto(int id)
     {
@@ -187,12 +183,7 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env) : C
         if (photo == null)
             return NotFound();
 
-        string filePath = Path.Combine(_env.WebRootPath, "uploads", photo.FileName);
-        if (System.IO.File.Exists(filePath))
-        {
-            try { System.IO.File.Delete(filePath); }
-            catch (Exception ex) { Console.WriteLine($"Warning: Could not delete {filePath}: {ex.Message}"); }
-        }
+        await _blobStorage.DeleteFileAsync(photo.FileName);
 
         _context.Photos.Remove(photo);
         await _context.SaveChangesAsync();
@@ -217,13 +208,13 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env) : C
     {
         foreach (var photo in photos)
         {
-            string filePath = Path.Combine(_env.WebRootPath, "uploads", photo.FileName);
-            if (System.IO.File.Exists(filePath))
+            var fileStream = await _blobStorage.DownloadFileAsync(photo.FileName);
+            if (fileStream != null)
             {
                 var entry = archive.CreateEntry($"{folderName}/{photo.Id}_{photo.FileName}");
                 using var entryStream = entry.Open();
-                using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
                 await fileStream.CopyToAsync(entryStream);
+                await fileStream.DisposeAsync();
             }
         }
     }
