@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using FOMSApp.API.Data;
-using FOMSApp.API.Services;
 using FOMSApp.Shared.Models;
 
 namespace FOMSApp.API.Controllers;
@@ -9,10 +8,10 @@ namespace FOMSApp.API.Controllers;
 // API controller for vault CRUD operations.
 [Route("api/[controller]")]
 [ApiController]
-public class VaultsController(AppDbContext context, BlobStorageService blobStorage) : ControllerBase
+public class VaultsController(AppDbContext context, IWebHostEnvironment env) : ControllerBase
 {
     private readonly AppDbContext _context = context;
-    private readonly BlobStorageService _blobStorage = blobStorage;
+    private readonly IWebHostEnvironment _env = env;
 
     // GET: api/vaults - Gets all vaults with their associated photos.
     [HttpGet]
@@ -89,10 +88,16 @@ public class VaultsController(AppDbContext context, BlobStorageService blobStora
         if (vault == null)
             return NotFound();
 
-        // Delete photo files from blob storage
+        // Delete photo files from disk
+        string uploadPath = Path.Combine(_env.WebRootPath, "uploads");
         foreach (var photo in vault.Photos)
         {
-            await _blobStorage.DeleteFileAsync(photo.FileName);
+            string filePath = Path.Combine(uploadPath, photo.FileName);
+            if (System.IO.File.Exists(filePath))
+            {
+                try { System.IO.File.Delete(filePath); }
+                catch (Exception ex) { Console.WriteLine($"Warning: Could not delete {photo.FileName}: {ex.Message}"); }
+            }
         }
 
         _context.Vaults.Remove(vault);
