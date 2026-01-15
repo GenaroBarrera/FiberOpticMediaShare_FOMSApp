@@ -34,8 +34,19 @@ builder.Services.AddScoped<BlobStorageService>();
 builder.Configuration.AddJsonFile("appsettings.json");
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(connectionString, x => x.UseNetTopologySuite()));
+// Support both SQL Server and SQLite (for local development)
+if (!string.IsNullOrWhiteSpace(connectionString) && connectionString.Contains(".db"))
+{
+    // SQLite for local development (free, no Azure needed)
+    builder.Services.AddDbContext<AppDbContext>(options =>
+        options.UseSqlite(connectionString, x => x.UseNetTopologySuite()));
+}
+else if (!string.IsNullOrWhiteSpace(connectionString))
+{
+    // SQL Server (LocalDB or Azure SQL)
+    builder.Services.AddDbContext<AppDbContext>(options =>
+        options.UseSqlServer(connectionString, x => x.UseNetTopologySuite()));
+}
 
 // Configure Azure AD Authentication (optional - only if configured)
 var tenantId = builder.Configuration["AzureAd:TenantId"];

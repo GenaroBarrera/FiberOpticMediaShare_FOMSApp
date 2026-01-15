@@ -1,6 +1,15 @@
-# Azure Deployment Guide for FOMSApp
+# Azure Deployment Guide for FOMSApp (Production Setup)
 
-This guide will help you deploy FOMSApp to Azure.
+This guide will help you deploy FOMSApp to Azure with **production-grade services** (~$28-30/month).
+
+## 💰 Cost-Saving Alternatives
+
+**Looking for free options?** Check out:
+- 🆓 **`LOCAL_DEVELOPMENT_SETUP.md`** - 100% free local development (no Azure)
+- 🆓 **`FREE_TIER_DEPLOYMENT.md`** - Azure free tier setup ($0/month for 12 months)
+- 📊 **`COST_OPTIMIZED_SETUP.md`** - Compare all options and costs
+
+## Prerequisites
 
 ## Prerequisites
 
