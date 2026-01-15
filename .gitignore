@@ -9,6 +9,9 @@
 # Cursor IDE rules (keep local, don't push to repo)
 .cursorrules
 
+# Documentation folder (keep local, don't push to repo)
+Documentation/
+
 # User-specific files
 *.rsuser
 *.suo

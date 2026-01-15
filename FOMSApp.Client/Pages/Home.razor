@@ -55,7 +55,7 @@ else
                         @onclick="async () => await UndoLastAction()"
                         disabled="@(undoHistory.Count == 0)"
                         title="@(undoHistory.Count > 0 ? $"Undo last action ({undoHistory.Count} available)" : "No actions to undo")">
-                    ? Undo
+                    <i class="bi bi-arrow-counterclockwise"></i> Undo
                 </button>
                 <button type="button" 
                         class="btn @(currentMode == MapMode.Select ? "btn-primary" : "btn-outline-primary")"
@@ -74,7 +74,7 @@ else
                     }
                     else
                     {
-                        <text>?? Download Selected (@(selectedVaultIds.Count + selectedMidpointIds.Count))</text>
+                        <text><i class="bi bi-download"></i> Download Selected (@(selectedVaultIds.Count + selectedMidpointIds.Count))</text>
                     }
                 </button>
             </div>
@@ -89,11 +89,11 @@ else
                     title="@(isSatelliteView ? "Switch to default map" : "Switch to satellite view")">
                 @if (isSatelliteView)
                 {
-                    <text>??? Map</text>
+                    <text><i class="bi bi-map"></i> Map</text>
                 }
                 else
                 {
-                    <text>??? Satellite</text>
+                    <text>🛰️ Satellite</text>
                 }
             </button>
 
@@ -117,7 +117,7 @@ else
                         }
                         else
                         {
-                            <text>Search</text>
+                            <text><i class="bi bi-search"></i> Search</text>
                         }
                     </button>
                 </div>
