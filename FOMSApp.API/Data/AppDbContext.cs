@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 using FOMSApp.Shared.Models;
 
 namespace FOMSApp.API.Data;
@@ -16,26 +15,18 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     {
         base.OnModelCreating(modelBuilder);
 
-        // Configure spatial data type for vault locations
-        // Only set geography type for SQL Server; SQLite uses its own spatial types
-        // Check if we're using SQL Server by examining the options extension
-        var isSqlServer = options.Extensions.Any(e => 
-            e.GetType().Name.Contains("SqlServer", StringComparison.OrdinalIgnoreCase));
+        // Configure spatial data type for SQL Server geography columns
+        modelBuilder.Entity<Vault>()
+            .Property(v => v.Location)
+            .HasColumnType("geography");
         
-        if (isSqlServer)
-        {
-            modelBuilder.Entity<Vault>()
-                .Property(v => v.Location)
-                .HasColumnType("geography");
-            
-            modelBuilder.Entity<Midpoint>()
-                .Property(m => m.Location)
-                .HasColumnType("geography");
-            
-            modelBuilder.Entity<Cable>()
-                .Property(c => c.Path)
-                .HasColumnType("geography");
-        }
+        modelBuilder.Entity<Midpoint>()
+            .Property(m => m.Location)
+            .HasColumnType("geography");
+        
+        modelBuilder.Entity<Cable>()
+            .Property(c => c.Path)
+            .HasColumnType("geography");
 
         // Configure cascade delete for vault photos
         modelBuilder.Entity<Photo>()
