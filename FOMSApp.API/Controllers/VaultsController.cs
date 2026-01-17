@@ -8,10 +8,11 @@ namespace FOMSApp.API.Controllers;
 // API controller for vault CRUD operations.
 [Route("api/[controller]")]
 [ApiController]
-public class VaultsController(AppDbContext context, IWebHostEnvironment env) : ControllerBase
+public class VaultsController(AppDbContext context, IWebHostEnvironment env, ILogger<VaultsController> logger) : ControllerBase
 {
     private readonly AppDbContext _context = context;
     private readonly IWebHostEnvironment _env = env;
+    private readonly ILogger<VaultsController> _logger = logger;
 
     // GET: api/vaults - Gets all vaults with their associated photos.
     [HttpGet]
@@ -19,6 +20,7 @@ public class VaultsController(AppDbContext context, IWebHostEnvironment env) : C
     {
         return await _context.Vaults
             .Include(v => v.Photos)
+            .AsNoTracking()
             .ToListAsync();
     }
 
@@ -38,10 +40,24 @@ public class VaultsController(AppDbContext context, IWebHostEnvironment env) : C
     [HttpPost]
     public async Task<ActionResult<Vault>> PostVault(Vault vault)
     {
-        _context.Vaults.Add(vault);
-        await _context.SaveChangesAsync();
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
 
-        return CreatedAtAction(nameof(GetVault), new { id = vault.Id }, vault);
+        try
+        {
+            _context.Vaults.Add(vault);
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Created vault with ID: {VaultId}", vault.Id);
+
+            return CreatedAtAction(nameof(GetVault), new { id = vault.Id }, vault);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating vault");
+            return StatusCode(500, "An error occurred while creating the vault.");
+        }
     }
 
     // PUT: api/vaults/{id} - Updates an existing vault.
@@ -96,7 +112,10 @@ public class VaultsController(AppDbContext context, IWebHostEnvironment env) : C
             if (System.IO.File.Exists(filePath))
             {
                 try { System.IO.File.Delete(filePath); }
-                catch (Exception ex) { Console.WriteLine($"Warning: Could not delete {photo.FileName}: {ex.Message}"); }
+                catch (Exception ex) 
+                { 
+                    _logger.LogWarning(ex, "Could not delete photo file: {FileName}", photo.FileName); 
+                }
             }
         }
 

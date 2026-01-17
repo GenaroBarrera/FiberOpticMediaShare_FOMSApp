@@ -8,15 +8,18 @@ namespace FOMSApp.API.Controllers;
 // API controller for cable route CRUD operations.
 [Route("api/[controller]")]
 [ApiController]
-public class CablesController(AppDbContext context) : ControllerBase
+public class CablesController(AppDbContext context, ILogger<CablesController> logger) : ControllerBase
 {
     private readonly AppDbContext _context = context;
+    private readonly ILogger<CablesController> _logger = logger;
 
     // GET: api/cables - Gets all cable routes.
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Cable>>> GetCables()
     {
-        return await _context.Cables.ToListAsync();
+        return await _context.Cables
+            .AsNoTracking()
+            .ToListAsync();
     }
 
     // GET: api/cables/{id} - Gets a single cable by ID.
@@ -35,10 +38,24 @@ public class CablesController(AppDbContext context) : ControllerBase
     [HttpPost]
     public async Task<ActionResult<Cable>> PostCable(Cable cable)
     {
-        _context.Cables.Add(cable);
-        await _context.SaveChangesAsync();
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
 
-        return CreatedAtAction(nameof(GetCables), new { id = cable.Id }, cable);
+        try
+        {
+            _context.Cables.Add(cable);
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Created cable with ID: {CableId}", cable.Id);
+
+            return CreatedAtAction(nameof(GetCables), new { id = cable.Id }, cable);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating cable");
+            return StatusCode(500, "An error occurred while creating the cable.");
+        }
     }
 
     // PUT: api/cables/{id} - Updates an existing cable route.

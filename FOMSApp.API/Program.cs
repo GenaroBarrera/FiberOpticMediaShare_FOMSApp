@@ -34,11 +34,27 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // Configure CORS
 builder.Services.AddCors(options =>
 {
+    // Development: Allow all origins for local development
     options.AddPolicy("AllowAll", policy =>
     {
         policy.AllowAnyOrigin()
               .AllowAnyMethod()
               .AllowAnyHeader();
+    });
+    
+    // Production: Use specific origins (configure in appsettings.json)
+    options.AddPolicy("Production", policy =>
+    {
+        var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() 
+            ?? Array.Empty<string>();
+        
+        if (allowedOrigins.Length > 0)
+        {
+            policy.WithOrigins(allowedOrigins)
+                  .AllowAnyMethod()
+                  .AllowAnyHeader()
+                  .AllowCredentials();
+        }
     });
 });
 
@@ -50,7 +66,15 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseCors("AllowAll");
+// Use appropriate CORS policy based on environment
+if (app.Environment.IsDevelopment())
+{
+    app.UseCors("AllowAll");
+}
+else
+{
+    app.UseCors("Production");
+}
 app.UseStaticFiles();
 app.UseAuthorization();
 
@@ -75,6 +99,3 @@ app.MapGet("/", () =>
 app.MapControllers();
 
 app.Run();
-
-//enter new comment here to test the git push
-

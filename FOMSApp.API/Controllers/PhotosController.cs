@@ -9,10 +9,11 @@ namespace FOMSApp.API.Controllers;
 // API controller for photo uploads and management.
 [Route("api/[controller]")]
 [ApiController]
-public class PhotosController(AppDbContext context, IWebHostEnvironment env) : ControllerBase
+public class PhotosController(AppDbContext context, IWebHostEnvironment env, ILogger<PhotosController> logger) : ControllerBase
 {
     private readonly AppDbContext _context = context;
     private readonly IWebHostEnvironment _env = env;
+    private readonly ILogger<PhotosController> _logger = logger;
 
     // GET: api/photos/vault/{vaultId} - Gets all photos for a specific vault.
     [HttpGet("vault/{vaultId}")]
@@ -20,6 +21,7 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env) : C
     {
         return await _context.Photos
             .Where(p => p.VaultId == vaultId)
+            .AsNoTracking()
             .ToListAsync();
     }
 
@@ -29,6 +31,7 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env) : C
     {
         return await _context.Photos
             .Where(p => p.MidpointId == midpointId)
+            .AsNoTracking()
             .ToListAsync();
     }
 
@@ -43,37 +46,66 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env) : C
             (!upload.VaultId.HasValue && !upload.MidpointId.HasValue))
             return BadRequest("Provide either VaultId or MidpointId, not both.");
 
-        string uploadPath = Path.Combine(_env.WebRootPath, "uploads");
-        if (!Directory.Exists(uploadPath))
-            Directory.CreateDirectory(uploadPath);
-
-        string uniqueFileName = Guid.NewGuid().ToString() + Path.GetExtension(upload.File.FileName);
-        string fullPath = Path.Combine(uploadPath, uniqueFileName);
-
-        using (var stream = new FileStream(fullPath, FileMode.Create))
+        // Validate file type (allow common image formats)
+        var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp" };
+        var fileExtension = Path.GetExtension(upload.File.FileName).ToLowerInvariant();
+        if (!allowedExtensions.Contains(fileExtension))
         {
-            await upload.File.CopyToAsync(stream);
+            return BadRequest($"File type not allowed. Allowed types: {string.Join(", ", allowedExtensions)}");
         }
 
-        var photo = new Photo
+        // Validate file size (20MB max)
+        const long maxFileSize = 20 * 1024 * 1024; // 20MB
+        if (upload.File.Length > maxFileSize)
         {
-            FileName = uniqueFileName,
-            VaultId = upload.VaultId,
-            MidpointId = upload.MidpointId,
-            UploadedAt = DateTime.Now
-        };
+            return BadRequest($"File size exceeds maximum allowed size of {maxFileSize / (1024 * 1024)}MB.");
+        }
 
-        _context.Photos.Add(photo);
-        await _context.SaveChangesAsync();
+        try
+        {
+            string uploadPath = Path.Combine(_env.WebRootPath, "uploads");
+            if (!Directory.Exists(uploadPath))
+                Directory.CreateDirectory(uploadPath);
 
-        return Ok(photo);
+            string uniqueFileName = Guid.NewGuid().ToString() + fileExtension;
+            string fullPath = Path.Combine(uploadPath, uniqueFileName);
+
+            using (var stream = new FileStream(fullPath, FileMode.Create))
+            {
+                await upload.File.CopyToAsync(stream);
+            }
+
+            var photo = new Photo
+            {
+                FileName = uniqueFileName,
+                VaultId = upload.VaultId,
+                MidpointId = upload.MidpointId,
+                UploadedAt = DateTime.Now
+            };
+
+            _context.Photos.Add(photo);
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Uploaded photo with ID: {PhotoId} for {EntityType} ID: {EntityId}", 
+                photo.Id, upload.VaultId.HasValue ? "Vault" : "Midpoint", 
+                upload.VaultId ?? upload.MidpointId ?? 0);
+
+            return Ok(photo);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error uploading photo");
+            return StatusCode(500, "An error occurred while uploading the photo.");
+        }
     }
 
     // GET: api/photos/vault/{vaultId}/download - Downloads all photos for a vault as a ZIP file.
     [HttpGet("vault/{vaultId}/download")]
     public async Task<IActionResult> DownloadVaultPhotos(int vaultId)
     {
-        var photos = await _context.Photos.Where(p => p.VaultId == vaultId).ToListAsync();
+        var photos = await _context.Photos
+            .Where(p => p.VaultId == vaultId)
+            .AsNoTracking()
+            .ToListAsync();
 
         if (photos.Count == 0)
             return NotFound("No photos found for this vault.");
@@ -106,7 +138,10 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env) : C
     [HttpGet("midpoint/{midpointId}/download")]
     public async Task<IActionResult> DownloadMidpointPhotos(int midpointId)
     {
-        var photos = await _context.Photos.Where(p => p.MidpointId == midpointId).ToListAsync();
+        var photos = await _context.Photos
+            .Where(p => p.MidpointId == midpointId)
+            .AsNoTracking()
+            .ToListAsync();
 
         if (photos.Count == 0)
             return NotFound("No photos found for this midpoint.");
@@ -150,7 +185,10 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env) : C
         {
             foreach (var vaultId in vaultIdList)
             {
-                var photos = await _context.Photos.Where(p => p.VaultId == vaultId).ToListAsync();
+                var photos = await _context.Photos
+                    .Where(p => p.VaultId == vaultId)
+                    .AsNoTracking()
+                    .ToListAsync();
                 if (photos.Count > 0)
                 {
                     var vault = await _context.Vaults.FindAsync(vaultId);
@@ -161,7 +199,10 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env) : C
 
             foreach (var midpointId in midpointIdList)
             {
-                var photos = await _context.Photos.Where(p => p.MidpointId == midpointId).ToListAsync();
+                var photos = await _context.Photos
+                    .Where(p => p.MidpointId == midpointId)
+                    .AsNoTracking()
+                    .ToListAsync();
                 if (photos.Count > 0)
                 {
                     var midpoint = await _context.Midpoints.FindAsync(midpointId);
@@ -191,7 +232,10 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env) : C
         if (System.IO.File.Exists(filePath))
         {
             try { System.IO.File.Delete(filePath); }
-            catch (Exception ex) { Console.WriteLine($"Warning: Could not delete {filePath}: {ex.Message}"); }
+            catch (Exception ex) 
+            { 
+                _logger.LogWarning(ex, "Could not delete photo file: {FilePath}", filePath); 
+            }
         }
 
         _context.Photos.Remove(photo);

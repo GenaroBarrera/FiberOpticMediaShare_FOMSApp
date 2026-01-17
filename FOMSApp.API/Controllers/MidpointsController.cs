@@ -8,16 +8,19 @@ namespace FOMSApp.API.Controllers;
 // API controller for midpoint CRUD operations.
 [Route("api/[controller]")]
 [ApiController]
-public class MidpointsController(AppDbContext context, IWebHostEnvironment env) : ControllerBase
+public class MidpointsController(AppDbContext context, IWebHostEnvironment env, ILogger<MidpointsController> logger) : ControllerBase
 {
     private readonly AppDbContext _context = context;
     private readonly IWebHostEnvironment _env = env;
+    private readonly ILogger<MidpointsController> _logger = logger;
 
     // GET: api/midpoints - Gets all midpoints.
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Midpoint>>> GetMidpoints()
     {
-        return await _context.Midpoints.ToListAsync();
+        return await _context.Midpoints
+            .AsNoTracking()
+            .ToListAsync();
     }
 
     // GET: api/midpoints/{id} - Gets a single midpoint by ID.
@@ -36,10 +39,24 @@ public class MidpointsController(AppDbContext context, IWebHostEnvironment env) 
     [HttpPost]
     public async Task<ActionResult<Midpoint>> PostMidpoint(Midpoint midpoint)
     {
-        _context.Midpoints.Add(midpoint);
-        await _context.SaveChangesAsync();
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
 
-        return CreatedAtAction(nameof(GetMidpoints), new { id = midpoint.Id }, midpoint);
+        try
+        {
+            _context.Midpoints.Add(midpoint);
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Created midpoint with ID: {MidpointId}", midpoint.Id);
+
+            return CreatedAtAction(nameof(GetMidpoints), new { id = midpoint.Id }, midpoint);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating midpoint");
+            return StatusCode(500, "An error occurred while creating the midpoint.");
+        }
     }
 
     // PUT: api/midpoints/{id} - Updates an existing midpoint.
@@ -94,7 +111,10 @@ public class MidpointsController(AppDbContext context, IWebHostEnvironment env) 
             if (System.IO.File.Exists(filePath))
             {
                 try { System.IO.File.Delete(filePath); }
-                catch (Exception ex) { Console.WriteLine($"Warning: Could not delete {photo.FileName}: {ex.Message}"); }
+                catch (Exception ex) 
+                { 
+                    _logger.LogWarning(ex, "Could not delete photo file: {FileName}", photo.FileName); 
+                }
             }
         }
 
