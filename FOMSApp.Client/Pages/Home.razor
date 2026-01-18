@@ -50,6 +50,31 @@ else
                         @onclick="async () => await SetMode(MapMode.Delete)">
                     Delete
                 </button>
+                @if (currentMode == MapMode.Delete)
+                {
+                    <button type="button"
+                            class="btn btn-danger"
+                            @onclick="async () => await DeleteSelectedEntities()"
+                            disabled="@(isDeletingSelected || TotalDeleteSelectedCount == 0)"
+                            title="@(TotalDeleteSelectedCount > 0 ? $"Delete {TotalDeleteSelectedCount} selected item(s)" : "Select items on the map to delete")">
+                        @if (isDeletingSelected)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            <text>Deleting...</text>
+                        }
+                        else
+                        {
+                            <text>Delete Selected (@TotalDeleteSelectedCount)</text>
+                        }
+                    </button>
+                    <button type="button"
+                            class="btn btn-outline-secondary"
+                            @onclick="async () => await ClearDeleteSelections()"
+                            disabled="@(isDeletingSelected || TotalDeleteSelectedCount == 0)"
+                            title="Clear delete selection">
+                        Clear
+                    </button>
+                }
                 <button type="button" 
                         class="btn btn-outline-secondary"
                         @onclick="async () => await UndoLastAction()"
@@ -343,6 +368,19 @@ else
     // Set of midpoint IDs that have been selected for batch operations (e.g., downloading photos).
     private HashSet<int> selectedMidpointIds = new();
 
+    // Set of vault/midpoint/cable IDs selected for batch deletion (Delete mode).
+    // This is intentionally separate from the Select-mode sets used for photo downloads.
+    private HashSet<int> deleteSelectedVaultIds = new();
+    private HashSet<int> deleteSelectedMidpointIds = new();
+    private HashSet<int> deleteSelectedCableIds = new();
+
+    private int TotalDeleteSelectedCount =>
+        deleteSelectedVaultIds.Count + deleteSelectedMidpointIds.Count + deleteSelectedCableIds.Count;
+
+    // Indicates whether a batch delete operation is currently running.
+    // Used to disable the "Delete Selected" button and show a loading state.
+    private bool isDeletingSelected = false;
+
     // Indicates whether photos are currently being downloaded for selected entities.
     // Used to disable the download button and show a loading state during download.
     private bool isDownloadingSelected = false;
@@ -627,42 +665,44 @@ else
             }
             return;
         }
-        
-        // Only handle deletion if we're in Delete mode
-        if (currentMode != MapMode.Delete)
+
+        // Handle delete mode (multi-select + batch delete)
+        if (currentMode == MapMode.Delete)
         {
-            Console.WriteLine($"Not in delete or select mode, ignoring click. Current mode: {currentMode}");
+            string lowerType = entityType.ToLower();
+            if (lowerType == "vault")
+            {
+                if (deleteSelectedVaultIds.Contains(entityId))
+                    deleteSelectedVaultIds.Remove(entityId);
+                else
+                    deleteSelectedVaultIds.Add(entityId);
+
+                await UpdateVaultDeleteSelection(entityId);
+            }
+            else if (lowerType == "midpoint")
+            {
+                if (deleteSelectedMidpointIds.Contains(entityId))
+                    deleteSelectedMidpointIds.Remove(entityId);
+                else
+                    deleteSelectedMidpointIds.Add(entityId);
+
+                await UpdateMidpointDeleteSelection(entityId);
+            }
+            else if (lowerType == "cable")
+            {
+                if (deleteSelectedCableIds.Contains(entityId))
+                    deleteSelectedCableIds.Remove(entityId);
+                else
+                    deleteSelectedCableIds.Add(entityId);
+
+                await UpdateCableDeleteSelection(entityId);
+            }
+
+            StateHasChanged();
             return;
         }
-
-        try
-        {
-            // Show confirmation dialog
-            var confirmed = await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to delete this {entityType}?");
-            if (!confirmed)
-            {
-                return;
-            }
-
-            // Delete based on entity type
-            switch (entityType.ToLower())
-            {
-                case "vault":
-                    await DeleteVault(entityId);
-                    break;
-                case "midpoint":
-                    await DeleteMidpoint(entityId);
-                    break;
-                case "cable":
-                    await DeleteCable(entityId);
-                    break;
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"ERROR deleting {entityType}: {ex.Message}");
-            await JS.InvokeVoidAsync("alert", $"Failed to delete {entityType}. Error: {ex.Message}");
-        }
+        
+        Console.WriteLine($"Not in delete or select mode, ignoring click. Current mode: {currentMode}");
     }
 
     // Handles marker drag end events when a user moves a vault or midpoint marker to a new location.
@@ -763,6 +803,14 @@ else
                 await ClearAllSelections();
             }
 
+            // Clear Delete-mode selections when leaving Delete mode
+            bool wasInDeleteMode = currentMode == MapMode.Delete;
+            bool isLeavingDeleteMode = wasInDeleteMode && mode != MapMode.Delete;
+            if (isLeavingDeleteMode)
+            {
+                await ClearDeleteSelections();
+            }
+
             currentMode = mode;
 
             // Update JavaScript delete mode state so click handlers know the current mode
@@ -796,7 +844,7 @@ else
             MapMode.AddVault => "Click on the map to add a new vault at that location.",
             MapMode.AddMidpoint => "Click on the map to add a new midpoint at that location.",
             MapMode.DrawCable => "Click multiple points on the map to define the cable path. Click 'Finish Cable' when done.",
-            MapMode.Delete => "Click on a vault, midpoint, or cable to delete it.",
+            MapMode.Delete => "Click vaults, midpoints, and cables to select them for deletion. Then click 'Delete Selected'.",
             MapMode.Select => "Click on vaults or midpoints to select them. Use 'Download Selected' to download photos from selected items.",
             _ => ""
         };
@@ -2581,6 +2629,152 @@ else
         }
 
         StateHasChanged();
+    }
+
+    // Updates the marker visual state for a vault when Delete-mode selection changes.
+    private async Task UpdateVaultDeleteSelection(int vaultId)
+    {
+        if (module == null || mapInstance == null || !mapLayers.ContainsKey($"vault_{vaultId}"))
+            return;
+
+        try
+        {
+            bool isSelected = deleteSelectedVaultIds.Contains(vaultId);
+            await module.InvokeVoidAsync("setMarkerSelection", mapLayers[$"vault_{vaultId}"], isSelected);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating vault delete selection: {ex.Message}");
+        }
+    }
+
+    // Updates the marker visual state for a midpoint when Delete-mode selection changes.
+    private async Task UpdateMidpointDeleteSelection(int midpointId)
+    {
+        if (module == null || mapInstance == null || !mapLayers.ContainsKey($"midpoint_{midpointId}"))
+            return;
+
+        try
+        {
+            bool isSelected = deleteSelectedMidpointIds.Contains(midpointId);
+            await module.InvokeVoidAsync("setCircleSelection", mapLayers[$"midpoint_{midpointId}"], isSelected);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating midpoint delete selection: {ex.Message}");
+        }
+    }
+
+    // Updates the polyline visual state for a cable when Delete-mode selection changes.
+    private async Task UpdateCableDeleteSelection(int cableId)
+    {
+        if (module == null || mapInstance == null || !mapLayers.ContainsKey($"cable_{cableId}"))
+            return;
+
+        try
+        {
+            bool isSelected = deleteSelectedCableIds.Contains(cableId);
+            await module.InvokeVoidAsync("setPolylineSelection", mapLayers[$"cable_{cableId}"], isSelected);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating cable delete selection: {ex.Message}");
+        }
+    }
+
+    // Clears all Delete-mode selections and updates visuals to remove highlighting.
+    private async Task ClearDeleteSelections()
+    {
+        var vaultIdsToUpdate = deleteSelectedVaultIds.ToList();
+        var midpointIdsToUpdate = deleteSelectedMidpointIds.ToList();
+        var cableIdsToUpdate = deleteSelectedCableIds.ToList();
+
+        deleteSelectedVaultIds.Clear();
+        deleteSelectedMidpointIds.Clear();
+        deleteSelectedCableIds.Clear();
+
+        foreach (var vaultId in vaultIdsToUpdate)
+        {
+            await UpdateVaultDeleteSelection(vaultId);
+        }
+
+        foreach (var midpointId in midpointIdsToUpdate)
+        {
+            await UpdateMidpointDeleteSelection(midpointId);
+        }
+
+        foreach (var cableId in cableIdsToUpdate)
+        {
+            await UpdateCableDeleteSelection(cableId);
+        }
+
+        StateHasChanged();
+    }
+
+    // Deletes all selected items in Delete mode with a single confirmation prompt.
+    private async Task DeleteSelectedEntities()
+    {
+        if (isDeletingSelected)
+            return;
+
+        if (TotalDeleteSelectedCount == 0)
+        {
+            await JS.InvokeVoidAsync("alert", "No items selected. Click vaults, midpoints, and cables to select them for deletion first.");
+            return;
+        }
+
+        int vaultCount = deleteSelectedVaultIds.Count;
+        int midpointCount = deleteSelectedMidpointIds.Count;
+        int cableCount = deleteSelectedCableIds.Count;
+
+        var confirmed = await JS.InvokeAsync<bool>(
+            "confirm",
+            $"Delete selected items?\n\nVaults: {vaultCount}\nMidpoints: {midpointCount}\nCables: {cableCount}\n\nThis will delete them from the database."
+        );
+
+        if (!confirmed)
+            return;
+
+        isDeletingSelected = true;
+        StateHasChanged();
+
+        try
+        {
+            // Copy IDs so we can mutate the sets during deletion
+            var vaultIds = deleteSelectedVaultIds.ToList();
+            var midpointIds = deleteSelectedMidpointIds.ToList();
+            var cableIds = deleteSelectedCableIds.ToList();
+
+            // Delete vaults
+            foreach (var id in vaultIds)
+            {
+                await DeleteVault(id);
+                // Only remove from selection set if it was actually removed from the map (delete succeeded)
+                if (!mapLayers.ContainsKey($"vault_{id}"))
+                    deleteSelectedVaultIds.Remove(id);
+            }
+
+            // Delete midpoints
+            foreach (var id in midpointIds)
+            {
+                await DeleteMidpoint(id);
+                if (!mapLayers.ContainsKey($"midpoint_{id}"))
+                    deleteSelectedMidpointIds.Remove(id);
+            }
+
+            // Delete cables
+            foreach (var id in cableIds)
+            {
+                await DeleteCable(id);
+                if (!mapLayers.ContainsKey($"cable_{id}"))
+                    deleteSelectedCableIds.Remove(id);
+            }
+        }
+        finally
+        {
+            isDeletingSelected = false;
+            StateHasChanged();
+        }
     }
 
     // Downloads photos for all selected vaults and midpoints as a single ZIP file.

@@ -769,6 +769,44 @@ export function setCircleSelection(layer, isSelected) {
     layer.setIcon(newIcon);
 }
 
+// Function to update polyline selection visual state (e.g., cables).
+// This is called from C# to highlight/unhighlight a cable polyline for batch operations.
+export function setPolylineSelection(layer, isSelected) {
+    if (!layer) return;
+
+    try {
+        // Cache the original style once so we can restore it later
+        if (!layer._originalStyle) {
+            layer._originalStyle = {
+                color: layer.options?.color,
+                weight: layer.options?.weight,
+                opacity: layer.options?.opacity,
+                dashArray: layer.options?.dashArray
+            };
+        }
+
+        if (isSelected) {
+            // High-contrast highlight (gold + thicker line)
+            layer.setStyle({
+                color: '#FFD700',
+                weight: Math.max(6, (layer._originalStyle.weight || 4) + 2),
+                opacity: 1,
+                dashArray: null
+            });
+        } else {
+            // Restore original style
+            layer.setStyle({
+                color: layer._originalStyle.color,
+                weight: layer._originalStyle.weight,
+                opacity: layer._originalStyle.opacity,
+                dashArray: layer._originalStyle.dashArray
+            });
+        }
+    } catch (error) {
+        console.warn('Error updating polyline selection style:', error);
+    }
+}
+
 // Global function to download a file from base64 data with folder selection
 // This needs to be in the global scope so it can be called from C# via JSInterop
 // Uses File System Access API when available to let user choose save location
