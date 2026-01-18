@@ -85,23 +85,33 @@ else
                 <button type="button" 
                         class="btn @(currentMode == MapMode.Select ? "btn-primary" : "btn-outline-primary")"
                         @onclick="async () => await SetMode(MapMode.Select)">
-                    Select
+                    Download
                 </button>
-                <button type="button" 
-                        class="btn btn-success"
-                        @onclick="async () => await DownloadSelectedPhotos()"
-                        disabled="@(isDownloadingSelected || (selectedVaultIds.Count == 0 && selectedMidpointIds.Count == 0))"
-                        title="@(selectedVaultIds.Count + selectedMidpointIds.Count > 0 ? $"Download photos from {selectedVaultIds.Count + selectedMidpointIds.Count} selected item(s)" : "Select vaults or midpoints to download photos")">
-                    @if (isDownloadingSelected)
-                    {
-                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                        <text>Downloading...</text>
-                    }
-                    else
-                    {
-                        <text><i class="bi bi-download"></i> Download Selected (@(selectedVaultIds.Count + selectedMidpointIds.Count))</text>
-                    }
-                </button>
+                @if (currentMode == MapMode.Select)
+                {
+                    <button type="button" 
+                            class="btn btn-success"
+                            @onclick="async () => await DownloadSelectedPhotos()"
+                            disabled="@(isDownloadingSelected || TotalDownloadSelectedCount == 0)"
+                            title="@(TotalDownloadSelectedCount > 0 ? $"Download photos from {TotalDownloadSelectedCount} selected item(s)" : "Click vaults or midpoints to choose items for download")">
+                        @if (isDownloadingSelected)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            <text>Downloading...</text>
+                        }
+                        else
+                        {
+                            <text><i class="bi bi-download"></i> Download Selected (@TotalDownloadSelectedCount)</text>
+                        }
+                    </button>
+                    <button type="button"
+                            class="btn btn-outline-secondary"
+                            @onclick="async () => await ClearAllSelections()"
+                            disabled="@(isDownloadingSelected || TotalDownloadSelectedCount == 0)"
+                            title="Clear selection">
+                        Clear
+                    </button>
+                }
             </div>
         </div>
 
@@ -367,6 +377,8 @@ else
 
     // Set of midpoint IDs that have been selected for batch operations (e.g., downloading photos).
     private HashSet<int> selectedMidpointIds = new();
+
+    private int TotalDownloadSelectedCount => selectedVaultIds.Count + selectedMidpointIds.Count;
 
     // Set of vault/midpoint/cable IDs selected for batch deletion (Delete mode).
     // This is intentionally separate from the Select-mode sets used for photo downloads.
@@ -845,7 +857,7 @@ else
             MapMode.AddMidpoint => "Click on the map to add a new midpoint at that location.",
             MapMode.DrawCable => "Click multiple points on the map to define the cable path. Click 'Finish Cable' when done.",
             MapMode.Delete => "Click vaults, midpoints, and cables to select them for deletion. Then click 'Delete Selected'.",
-            MapMode.Select => "Click on vaults or midpoints to select them. Use 'Download Selected' to download photos from selected items.",
+            MapMode.Select => "Click vaults or midpoints to choose them for download. Then click 'Download Selected'.",
             _ => ""
         };
     }
