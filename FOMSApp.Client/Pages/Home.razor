@@ -1000,6 +1000,9 @@ else
 
         // Add a white circle marker at this point (visible vertex)
         var marker = await module.InvokeAsync<IJSObjectReference>("addCableVertexMarker", mapInstance, lat, lng);
+        // `addCableVertexMarker` returns a marker but does not add it to the map by default.
+        // While actively drawing a new cable, we want vertices visible as they are placed.
+        await module.InvokeVoidAsync("showLayer", mapInstance, marker);
         tempCableMarkers.Add(marker);
 
         // If we have at least 2 points, draw/update the preview polyline
@@ -1014,8 +1017,8 @@ else
             // Create array of coordinates for the preview
             var latLngs = cablePoints.Select(p => new { lat = p.Lat, lng = p.Lng }).ToList<object>();
             
-            // Draw preview polyline in orange
-            tempCablePolyline = await module.InvokeAsync<IJSObjectReference>("addPolyline", mapInstance, latLngs, "Orange", "Preview - Click 'Finish Cable' to save");
+            // Draw preview polyline in black (default cable color)
+            tempCablePolyline = await module.InvokeAsync<IJSObjectReference>("addPolyline", mapInstance, latLngs, "Black", "Preview - Click 'Finish Cable' to save");
         }
     }
 
