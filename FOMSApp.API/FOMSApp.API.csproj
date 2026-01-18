@@ -21,6 +21,7 @@
     <PackageReference Include="NetTopologySuite.IO.GeoJSON4STJ" Version="4.0.0" />
 
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.22.0" />
   </ItemGroup>
 
   <ItemGroup>

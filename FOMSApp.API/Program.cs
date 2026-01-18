@@ -1,7 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using FOMSApp.API.Data;
+using FOMSApp.API.Services;
+using FOMSApp.API.Configuration;
 using NetTopologySuite.IO.Converters;
 using System.Text.Json.Serialization;
+using Azure.Storage.Blobs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -30,6 +33,39 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(connectionString, x => x.UseNetTopologySuite()));
+
+// Configure storage service based on configuration
+var storageOptions = builder.Configuration.GetSection(StorageOptions.SectionName).Get<StorageOptions>() 
+    ?? new StorageOptions { Provider = "Local" };
+builder.Services.Configure<StorageOptions>(builder.Configuration.GetSection(StorageOptions.SectionName));
+
+// Register storage service based on provider
+if (storageOptions.Provider.Equals("Azure", StringComparison.OrdinalIgnoreCase))
+{
+    if (string.IsNullOrWhiteSpace(storageOptions.AzureConnectionString))
+    {
+        throw new InvalidOperationException(
+            "Azure storage is configured but AzureConnectionString is missing. " +
+            "Please set Storage:AzureConnectionString in appsettings.json or environment variables.");
+    }
+
+    builder.Services.AddSingleton(sp => new BlobServiceClient(storageOptions.AzureConnectionString));
+    builder.Services.AddSingleton<IStorageService>(sp =>
+    {
+        var blobServiceClient = sp.GetRequiredService<BlobServiceClient>();
+        var logger = sp.GetRequiredService<ILogger<AzureBlobStorageService>>();
+        return new AzureBlobStorageService(
+            blobServiceClient,
+            storageOptions.AzureContainerName,
+            logger,
+            storageOptions.AzureBaseUrl);
+    });
+}
+else
+{
+    // Default to local file storage
+    builder.Services.AddSingleton<IStorageService, LocalFileStorageService>();
+}
 
 // Configure CORS
 builder.Services.AddCors(options =>

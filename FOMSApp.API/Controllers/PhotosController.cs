@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using FOMSApp.API.Data;
+using FOMSApp.API.Services;
 using FOMSApp.Shared.Models;
 using System.IO.Compression;
 
@@ -9,10 +10,10 @@ namespace FOMSApp.API.Controllers;
 // API controller for photo uploads and management.
 [Route("api/[controller]")]
 [ApiController]
-public class PhotosController(AppDbContext context, IWebHostEnvironment env, ILogger<PhotosController> logger) : ControllerBase
+public class PhotosController(AppDbContext context, IStorageService storageService, ILogger<PhotosController> logger) : ControllerBase
 {
     private readonly AppDbContext _context = context;
-    private readonly IWebHostEnvironment _env = env;
+    private readonly IStorageService _storageService = storageService;
     private readonly ILogger<PhotosController> _logger = logger;
 
     // GET: api/photos/vault/{vaultId} - Gets all photos for a specific vault.
@@ -63,17 +64,11 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env, ILo
 
         try
         {
-            string uploadPath = Path.Combine(_env.WebRootPath, "uploads");
-            if (!Directory.Exists(uploadPath))
-                Directory.CreateDirectory(uploadPath);
-
-            string uniqueFileName = Guid.NewGuid().ToString() + fileExtension;
-            string fullPath = Path.Combine(uploadPath, uniqueFileName);
-
-            using (var stream = new FileStream(fullPath, FileMode.Create))
-            {
-                await upload.File.CopyToAsync(stream);
-            }
+            // Upload file using storage service
+            string uniqueFileName = await _storageService.UploadFileAsync(
+                upload.File.OpenReadStream(),
+                upload.File.FileName,
+                upload.File.ContentType);
 
             var photo = new Photo
             {
@@ -119,13 +114,13 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env, ILo
         {
             foreach (var photo in photos)
             {
-                string filePath = Path.Combine(_env.WebRootPath, "uploads", photo.FileName);
-                if (System.IO.File.Exists(filePath))
+                var fileStream = await _storageService.DownloadFileAsync(photo.FileName);
+                if (fileStream != null)
                 {
                     var entry = archive.CreateEntry($"{photo.Id}_{photo.FileName}");
                     using var entryStream = entry.Open();
-                    using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
                     await fileStream.CopyToAsync(entryStream);
+                    await fileStream.DisposeAsync();
                 }
             }
         }
@@ -155,13 +150,13 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env, ILo
         {
             foreach (var photo in photos)
             {
-                string filePath = Path.Combine(_env.WebRootPath, "uploads", photo.FileName);
-                if (System.IO.File.Exists(filePath))
+                var fileStream = await _storageService.DownloadFileAsync(photo.FileName);
+                if (fileStream != null)
                 {
                     var entry = archive.CreateEntry($"{photo.Id}_{photo.FileName}");
                     using var entryStream = entry.Open();
-                    using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
                     await fileStream.CopyToAsync(entryStream);
+                    await fileStream.DisposeAsync();
                 }
             }
         }
@@ -228,15 +223,8 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env, ILo
         if (photo == null)
             return NotFound();
 
-        string filePath = Path.Combine(_env.WebRootPath, "uploads", photo.FileName);
-        if (System.IO.File.Exists(filePath))
-        {
-            try { System.IO.File.Delete(filePath); }
-            catch (Exception ex) 
-            { 
-                _logger.LogWarning(ex, "Could not delete photo file: {FilePath}", filePath); 
-            }
-        }
+        // Delete file using storage service
+        await _storageService.DeleteFileAsync(photo.FileName);
 
         _context.Photos.Remove(photo);
         await _context.SaveChangesAsync();
@@ -261,13 +249,13 @@ public class PhotosController(AppDbContext context, IWebHostEnvironment env, ILo
     {
         foreach (var photo in photos)
         {
-            string filePath = Path.Combine(_env.WebRootPath, "uploads", photo.FileName);
-            if (System.IO.File.Exists(filePath))
+            var fileStream = await _storageService.DownloadFileAsync(photo.FileName);
+            if (fileStream != null)
             {
                 var entry = archive.CreateEntry($"{folderName}/{photo.Id}_{photo.FileName}");
                 using var entryStream = entry.Open();
-                using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
                 await fileStream.CopyToAsync(entryStream);
+                await fileStream.DisposeAsync();
             }
         }
     }
