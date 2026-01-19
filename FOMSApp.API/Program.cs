@@ -34,6 +34,10 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(connectionString, x => x.UseNetTopologySuite()));
 
+// Maintenance services
+builder.Services.AddScoped<DeletedEntitiesPurger>();
+builder.Services.AddHostedService<DeletedEntitiesPurgeHostedService>();
+
 // Configure storage service based on configuration
 var storageOptions = builder.Configuration.GetSection(StorageOptions.SectionName).Get<StorageOptions>() 
     ?? new StorageOptions { Provider = "Local" };

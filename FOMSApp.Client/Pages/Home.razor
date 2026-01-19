@@ -3144,22 +3144,37 @@ else
             switch (lastAction.ActionType)
             {
                 case UndoActionType.Delete:
-                    // Restore deleted entity by creating it again
+                    // Restore deleted entity.
+                    // Prefer soft-delete restore (PUT sets IsDeleted=false) so IDs stay stable and photos remain.
                     if (previousEntity is Vault vault)
                     {
-                        var vaultResponse = await Http.PostAsJsonAsync("api/vaults", vault, options);
-                        if (vaultResponse.IsSuccessStatusCode)
-                        {
-                            // Read the created vault from the response to get the correct ID
-                            var restoredVault = await vaultResponse.Content.ReadFromJsonAsync<Vault>(options);
-                            if (restoredVault == null)
-                            {
-                                await JS.InvokeVoidAsync("alert", "Failed to restore vault. Invalid response.");
-                                return;
-                            }
+                        vault.IsDeleted = false;
+                        var vaultRestoreResponse = await Http.PutAsJsonAsync($"api/vaults/{vault.Id}", vault, options);
 
+                        // Fallback: if the record was truly hard-deleted, recreate it (strip Id so SQL IDENTITY can assign).
+                        if (!vaultRestoreResponse.IsSuccessStatusCode && vaultRestoreResponse.StatusCode == System.Net.HttpStatusCode.NotFound)
+                        {
+                            vault.Id = 0;
+                            vault.IsDeleted = false;
+                            vaultRestoreResponse = await Http.PostAsJsonAsync("api/vaults", vault, options);
+                        }
+
+                        if (vaultRestoreResponse.IsSuccessStatusCode)
+                        {
                             await LoadVaults();
-                            // Re-add vault to map using the same logic as OnAfterRenderAsync
+                            // Re-add vault to map using the same logic as OnAfterRenderAsync / create flows.
+                            // Use the response body if present; otherwise fall back to the previousEntity.
+                            Vault restoredVault;
+                            if (vaultRestoreResponse.StatusCode == HttpStatusCode.NoContent)
+                            {
+                                // PUT returns 204 No Content -> fetch the restored entity
+                                restoredVault = await Http.GetFromJsonAsync<Vault>($"api/vaults/{vault.Id}", options) ?? vault;
+                            }
+                            else
+                            {
+                                // POST returns a body; prefer it but still fall back safely
+                                restoredVault = await vaultRestoreResponse.Content.ReadFromJsonAsync<Vault>(options) ?? vault;
+                            }
                             if (restoredVault.Location != null)
                             {
                                 List<Photo>? vaultPhotos = null;
@@ -3199,18 +3214,29 @@ else
                     }
                     else if (previousEntity is Midpoint midpoint)
                     {
-                        var midpointResponse = await Http.PostAsJsonAsync("api/midpoints", midpoint, options);
-                        if (midpointResponse.IsSuccessStatusCode)
-                        {
-                            // Read the created midpoint from the response to get the correct ID
-                            var restoredMidpoint = await midpointResponse.Content.ReadFromJsonAsync<Midpoint>(options);
-                            if (restoredMidpoint == null)
-                            {
-                                await JS.InvokeVoidAsync("alert", "Failed to restore midpoint. Invalid response.");
-                                return;
-                            }
+                        midpoint.IsDeleted = false;
+                        var midpointRestoreResponse = await Http.PutAsJsonAsync($"api/midpoints/{midpoint.Id}", midpoint, options);
 
+                        // Fallback: hard-deleted record -> recreate with stripped Id
+                        if (!midpointRestoreResponse.IsSuccessStatusCode && midpointRestoreResponse.StatusCode == System.Net.HttpStatusCode.NotFound)
+                        {
+                            midpoint.Id = 0;
+                            midpoint.IsDeleted = false;
+                            midpointRestoreResponse = await Http.PostAsJsonAsync("api/midpoints", midpoint, options);
+                        }
+
+                        if (midpointRestoreResponse.IsSuccessStatusCode)
+                        {
                             await LoadMidpoints();
+                            Midpoint restoredMidpoint;
+                            if (midpointRestoreResponse.StatusCode == HttpStatusCode.NoContent)
+                            {
+                                restoredMidpoint = await Http.GetFromJsonAsync<Midpoint>($"api/midpoints/{midpoint.Id}", options) ?? midpoint;
+                            }
+                            else
+                            {
+                                restoredMidpoint = await midpointRestoreResponse.Content.ReadFromJsonAsync<Midpoint>(options) ?? midpoint;
+                            }
                             // Re-add midpoint to map using the same logic as OnAfterRenderAsync
                             if (restoredMidpoint.Location != null)
                             {
@@ -3252,18 +3278,29 @@ else
                     }
                     else if (previousEntity is Cable cable)
                     {
-                        var cableResponse = await Http.PostAsJsonAsync("api/cables", cable, options);
-                        if (cableResponse.IsSuccessStatusCode)
-                        {
-                            // Read the created cable from the response to get the correct ID
-                            var restoredCable = await cableResponse.Content.ReadFromJsonAsync<Cable>(options);
-                            if (restoredCable == null)
-                            {
-                                await JS.InvokeVoidAsync("alert", "Failed to restore cable. Invalid response.");
-                                return;
-                            }
+                        cable.IsDeleted = false;
+                        var cableRestoreResponse = await Http.PutAsJsonAsync($"api/cables/{cable.Id}", cable, options);
 
+                        // Fallback: hard-deleted record -> recreate with stripped Id
+                        if (!cableRestoreResponse.IsSuccessStatusCode && cableRestoreResponse.StatusCode == System.Net.HttpStatusCode.NotFound)
+                        {
+                            cable.Id = 0;
+                            cable.IsDeleted = false;
+                            cableRestoreResponse = await Http.PostAsJsonAsync("api/cables", cable, options);
+                        }
+
+                        if (cableRestoreResponse.IsSuccessStatusCode)
+                        {
                             await LoadCables();
+                            Cable restoredCable;
+                            if (cableRestoreResponse.StatusCode == HttpStatusCode.NoContent)
+                            {
+                                restoredCable = await Http.GetFromJsonAsync<Cable>($"api/cables/{cable.Id}", options) ?? cable;
+                            }
+                            else
+                            {
+                                restoredCable = await cableRestoreResponse.Content.ReadFromJsonAsync<Cable>(options) ?? cable;
+                            }
                             // Re-add cable to map
                             if (restoredCable.Path != null)
                             {

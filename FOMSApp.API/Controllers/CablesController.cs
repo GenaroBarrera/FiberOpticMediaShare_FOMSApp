@@ -18,6 +18,7 @@ public class CablesController(AppDbContext context, ILogger<CablesController> lo
     public async Task<ActionResult<IEnumerable<Cable>>> GetCables()
     {
         return await _context.Cables
+            .Where(c => !c.IsDeleted)
             .AsNoTracking()
             .ToListAsync();
     }
@@ -73,6 +74,10 @@ public class CablesController(AppDbContext context, ILogger<CablesController> lo
         existingCable.Description = cable.Description;
         existingCable.Color = cable.Color;
         existingCable.Path = cable.Path;
+        existingCable.IsDeleted = cable.IsDeleted;
+        existingCable.DeletedAt = cable.IsDeleted
+            ? (existingCable.DeletedAt ?? DateTimeOffset.UtcNow)
+            : null;
 
         _context.Entry(existingCable).State = EntityState.Modified;
 
@@ -99,7 +104,9 @@ public class CablesController(AppDbContext context, ILogger<CablesController> lo
         if (cable == null)
             return NotFound();
 
-        _context.Cables.Remove(cable);
+        // Soft delete (preserve row so Undo can restore).
+        cable.IsDeleted = true;
+        cable.DeletedAt ??= DateTimeOffset.UtcNow;
         await _context.SaveChangesAsync();
 
         return NoContent();

@@ -19,6 +19,7 @@ public class VaultsController(AppDbContext context, IWebHostEnvironment env, ILo
     public async Task<ActionResult<IEnumerable<Vault>>> GetVaults()
     {
         return await _context.Vaults
+            .Where(v => !v.IsDeleted)
             .Include(v => v.Photos)
             .AsNoTracking()
             .ToListAsync();
@@ -76,6 +77,10 @@ public class VaultsController(AppDbContext context, IWebHostEnvironment env, ILo
         existingVault.Description = vault.Description;
         existingVault.Location = vault.Location;
         existingVault.Color = GetStatusColor(vault.Status);
+        existingVault.IsDeleted = vault.IsDeleted;
+        existingVault.DeletedAt = vault.IsDeleted
+            ? (existingVault.DeletedAt ?? DateTimeOffset.UtcNow)
+            : null;
 
         _context.Entry(existingVault).State = EntityState.Modified;
 
@@ -104,22 +109,11 @@ public class VaultsController(AppDbContext context, IWebHostEnvironment env, ILo
         if (vault == null)
             return NotFound();
 
-        // Delete photo files from disk
-        string uploadPath = Path.Combine(_env.WebRootPath, "uploads");
-        foreach (var photo in vault.Photos)
-        {
-            string filePath = Path.Combine(uploadPath, photo.FileName);
-            if (System.IO.File.Exists(filePath))
-            {
-                try { System.IO.File.Delete(filePath); }
-                catch (Exception ex) 
-                { 
-                    _logger.LogWarning(ex, "Could not delete photo file: {FileName}", photo.FileName); 
-                }
-            }
-        }
-
-        _context.Vaults.Remove(vault);
+        // Soft delete:
+        // - Preserve the DB row so it can be restored via Undo.
+        // - Preserve photo rows/files so downloads/history aren't destroyed.
+        vault.IsDeleted = true;
+        vault.DeletedAt ??= DateTimeOffset.UtcNow;
         await _context.SaveChangesAsync();
 
         return NoContent();

@@ -12,4 +12,11 @@ public class Midpoint
     public string? Description { get; set; } // Optional notes
     public Point? Location { get; set; } // GPS coordinates (lon, lat)
     public List<Photo> Photos { get; set; } = new(); // Associated photos
+
+    // Soft-delete flag. When true, the midpoint is hidden from normal lists/maps,
+    // but remains in the database so it can be restored (Undo).
+    public bool IsDeleted { get; set; } = false;
+
+    // Timestamp for when the midpoint was soft-deleted (UTC). Used for retention/purge logic.
+    public DateTimeOffset? DeletedAt { get; set; }
 }

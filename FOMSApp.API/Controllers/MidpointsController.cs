@@ -19,6 +19,7 @@ public class MidpointsController(AppDbContext context, IWebHostEnvironment env, 
     public async Task<ActionResult<IEnumerable<Midpoint>>> GetMidpoints()
     {
         return await _context.Midpoints
+            .Where(m => !m.IsDeleted)
             .AsNoTracking()
             .ToListAsync();
     }
@@ -75,6 +76,10 @@ public class MidpointsController(AppDbContext context, IWebHostEnvironment env, 
         existingMidpoint.Description = midpoint.Description;
         existingMidpoint.Location = midpoint.Location;
         existingMidpoint.Color = GetStatusColor(midpoint.Status);
+        existingMidpoint.IsDeleted = midpoint.IsDeleted;
+        existingMidpoint.DeletedAt = midpoint.IsDeleted
+            ? (existingMidpoint.DeletedAt ?? DateTimeOffset.UtcNow)
+            : null;
 
         _context.Entry(existingMidpoint).State = EntityState.Modified;
 
@@ -103,22 +108,9 @@ public class MidpointsController(AppDbContext context, IWebHostEnvironment env, 
         if (midpoint == null)
             return NotFound();
 
-        // Delete photo files from disk
-        string uploadPath = Path.Combine(_env.WebRootPath, "uploads");
-        foreach (var photo in midpoint.Photos)
-        {
-            string filePath = Path.Combine(uploadPath, photo.FileName);
-            if (System.IO.File.Exists(filePath))
-            {
-                try { System.IO.File.Delete(filePath); }
-                catch (Exception ex) 
-                { 
-                    _logger.LogWarning(ex, "Could not delete photo file: {FileName}", photo.FileName); 
-                }
-            }
-        }
-
-        _context.Midpoints.Remove(midpoint);
+        // Soft delete (preserve midpoint + photos so Undo can restore).
+        midpoint.IsDeleted = true;
+        midpoint.DeletedAt ??= DateTimeOffset.UtcNow;
         await _context.SaveChangesAsync();
 
         return NoContent();
