@@ -73,7 +73,15 @@ public sealed class DeletedEntitiesPurger(
                 }
 
                 if (deleted)
+                {
                     deleteSucceeded++;
+                    _logger.LogInformation(
+                        "Purged photo file '{FileName}' (PhotoId={PhotoId}, VaultId={VaultId}, MidpointId={MidpointId}).",
+                        photo.FileName,
+                        photo.Id,
+                        photo.VaultId,
+                        photo.MidpointId);
+                }
             }
         }
 

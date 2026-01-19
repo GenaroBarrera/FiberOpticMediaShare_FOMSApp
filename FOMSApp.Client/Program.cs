@@ -6,10 +6,15 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-// ==========================================
-// POINT THIS TO YOUR API
-// ==========================================
-// Make sure this port matches what your API terminal says (likely 5083)
-builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri("http://localhost:5083") }); // Ensure both use HTTP since we disabled HTTPS in API
+// API base URL comes from client config (wwwroot/appsettings*.json).
+// This lets launch profiles/environment switch API targets without code changes.
+var apiBaseUrl = builder.Configuration["ApiBaseUrl"];
+if (string.IsNullOrWhiteSpace(apiBaseUrl))
+{
+    apiBaseUrl = "https://localhost:7165/";
+}
+apiBaseUrl = apiBaseUrl.TrimEnd('/') + "/";
+
+builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri(apiBaseUrl) });
 
 await builder.Build().RunAsync();
