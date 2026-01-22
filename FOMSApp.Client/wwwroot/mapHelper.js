@@ -440,18 +440,19 @@ window.navigatePhoto = function(containerId, direction) {
     var baseUrlAttr = container.getAttribute('data-baseurl');
     
     // Decode baseUrl if it was HTML encoded
-    tempDiv.innerHTML = baseUrlAttr || '/uploads/';
-    var baseUrl = tempDiv.textContent || tempDiv.innerText || (baseUrlAttr || '/uploads/');
+    tempDiv.innerHTML = baseUrlAttr || '/api/photos/file/';
+    var baseUrl = tempDiv.textContent || tempDiv.innerText || (baseUrlAttr || '/api/photos/file/');
     
     // Update current index
     current += direction;
     if (current < 0) current = photos.length - 1;
     if (current >= photos.length) current = 0;
     
-    // Update image src
+    // Update image src - encode filename for URL
     var img = document.getElementById('img_' + containerId);
     if (img) {
-        img.src = baseUrl + photos[current].trim();
+        var fileName = photos[current].trim();
+        img.src = baseUrl + encodeURIComponent(fileName);
         img.alt = 'Photo ' + (current + 1) + ' of ' + photos.length;
     }
     

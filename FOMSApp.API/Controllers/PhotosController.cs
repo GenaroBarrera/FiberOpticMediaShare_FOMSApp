@@ -36,6 +36,37 @@ public class PhotosController(AppDbContext context, IStorageService storageServi
             .ToListAsync();
     }
 
+    // GET: api/photos/file/{fileName} - Serves a photo file from storage.
+    [HttpGet("file/{fileName}")]
+    public async Task<IActionResult> GetPhotoFile(string fileName)
+    {
+        // Security: Prevent path traversal attacks
+        if (fileName.Contains("..") || fileName.Contains("/") || fileName.Contains("\\"))
+        {
+            return BadRequest("Invalid file name.");
+        }
+
+        var fileStream = await _storageService.DownloadFileAsync(fileName);
+        if (fileStream == null)
+        {
+            return NotFound();
+        }
+
+        // Determine content type from file extension
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
+        var contentType = extension switch
+        {
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png" => "image/png",
+            ".gif" => "image/gif",
+            ".bmp" => "image/bmp",
+            ".webp" => "image/webp",
+            _ => "application/octet-stream"
+        };
+
+        return File(fileStream, contentType);
+    }
+
     // POST: api/photos - Uploads a photo file and creates a database record.
     [HttpPost]
     public async Task<ActionResult<Photo>> UploadPhoto([FromForm] PhotoUploadDto upload)
@@ -88,8 +119,13 @@ public class PhotosController(AppDbContext context, IStorageService storageServi
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error uploading photo");
-            return StatusCode(500, "An error occurred while uploading the photo.");
+            _logger.LogError(ex, "Error uploading photo: {Message}\n{StackTrace}", ex.Message, ex.StackTrace);
+            // Return detailed error for debugging (we can make this conditional later)
+            return StatusCode(500, new { 
+                error = "An error occurred while uploading the photo.",
+                message = ex.Message,
+                innerException = ex.InnerException?.Message
+            });
         }
     }
 

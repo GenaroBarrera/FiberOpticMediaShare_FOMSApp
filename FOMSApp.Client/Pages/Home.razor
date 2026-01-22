@@ -3064,7 +3064,8 @@ else
 
         string photoContainerId = $"photos_{entityType}_{entityId}";
         string baseUrl = Http.BaseAddress?.ToString().TrimEnd('/') ?? "";
-        string firstPhotoUrl = $"{baseUrl}/uploads/{System.Net.WebUtility.HtmlEncode(photos[0].FileName)}";
+        string firstFile = Uri.EscapeDataString(photos[0].FileName ?? "");
+        string firstPhotoUrl = $"{baseUrl}/api/photos/file/{firstFile}";
         
         // Build navigation buttons HTML - use single quotes in onclick to avoid conflicts with outer string
         string navButtons = "";
@@ -3089,7 +3090,7 @@ else
         // HTML encode the baseUrl for safety in the data attribute
         string encodedBaseUrl = System.Net.WebUtility.HtmlEncode(baseUrl);
         
-        return $"<div id='{photoContainerId}' style='margin: 8px 0;' data-photos='{System.Net.WebUtility.HtmlEncode(photoUrls)}' data-current='0' data-baseurl='{encodedBaseUrl}/uploads/'>" +
+        return $"<div id='{photoContainerId}' style='margin: 8px 0;' data-photos='{System.Net.WebUtility.HtmlEncode(photoUrls)}' data-current='0' data-baseurl='{encodedBaseUrl}/api/photos/file/'>" +
             $"<img id='img_{photoContainerId}' src='{firstPhotoUrl}' style='width: 100%; max-width: 280px; height: auto; display: block; border: 1px solid #ddd;' alt='Photo 1 of {photos.Count}' />" +
             navButtons +
             $"</div>";

@@ -99,13 +99,7 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-
-// Use appropriate CORS policy based on environment
+// CORS must be early in the pipeline, before other middleware
 if (app.Environment.IsDevelopment())
 {
     app.UseCors("AllowAll");
@@ -114,6 +108,13 @@ else
 {
     app.UseCors("Production");
 }
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
 app.UseStaticFiles();
 app.UseAuthorization();
 

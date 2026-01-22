@@ -190,7 +190,7 @@ else
                     {
                         <div class="col-md-4 mb-3">
                             <div class="card h-100">
-                                <img src="@($"{Http.BaseAddress}uploads/{photo.FileName}")" class="card-img-top" alt="Midpoint Photo"
+                                <img src="@($"{Http.BaseAddress}api/photos/file/{Uri.EscapeDataString(photo.FileName)}")" class="card-img-top" alt="Midpoint Photo"
                                     style="max-height: 200px; object-fit: cover; cursor: pointer;"
                                     @onclick="() => OpenPhoto(photo.FileName)">
                                 <div class="card-body">
@@ -256,7 +256,7 @@ else
         photos = await Http.GetFromJsonAsync<List<Photo>>($"api/photos/midpoint/{Id}");
     }
 
-    private void OpenPhoto(string fileName) => selectedPhotoUrl = $"{Http.BaseAddress}uploads/{fileName}";
+    private void OpenPhoto(string fileName) => selectedPhotoUrl = $"{Http.BaseAddress}api/photos/file/{Uri.EscapeDataString(fileName)}";
     private void ClosePhoto() => selectedPhotoUrl = null;
 
     // Maps status to Bootstrap badge color

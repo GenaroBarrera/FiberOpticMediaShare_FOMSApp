@@ -24,23 +24,26 @@ public class AzureBlobStorageService : IStorageService
         _logger = logger;
         _baseUrl = baseUrl;
 
-        // Ensure container exists
-        InitializeContainerAsync().GetAwaiter().GetResult();
+        // Ensure container exists (fire and forget - will be created on first use if this fails)
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await InitializeContainerAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to initialize Azure Blob Storage container during startup. It will be created on first use.");
+            }
+        });
     }
 
     private async Task InitializeContainerAsync()
     {
-        try
-        {
-            var containerClient = _blobServiceClient.GetBlobContainerClient(_containerName);
-            await containerClient.CreateIfNotExistsAsync(PublicAccessType.Blob);
-            _logger.LogInformation("Azure Blob Storage container '{ContainerName}' is ready", _containerName);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error initializing Azure Blob Storage container: {ContainerName}", _containerName);
-            throw;
-        }
+        var containerClient = _blobServiceClient.GetBlobContainerClient(_containerName);
+        // Use Private access (no public access) - photos will be served through the API
+        await containerClient.CreateIfNotExistsAsync(PublicAccessType.None);
+        _logger.LogInformation("Azure Blob Storage container '{ContainerName}' is ready", _containerName);
     }
 
     public async Task<string> UploadFileAsync(Stream fileStream, string fileName, string contentType)
@@ -50,6 +53,8 @@ public class AzureBlobStorageService : IStorageService
 
         try
         {
+            // Ensure container exists before upload
+            await InitializeContainerAsync();
             var containerClient = _blobServiceClient.GetBlobContainerClient(_containerName);
             var blobClient = containerClient.GetBlobClient(uniqueFileName);
 
