@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using FOMSApp.API.Services;
 
@@ -5,11 +6,11 @@ namespace FOMSApp.API.Controllers;
 
 /// <summary>
 /// Maintenance endpoints intended for admin use.
-/// NOTE: This project currently has no authentication/authorization layer.
-/// In production, protect these endpoints (e.g., Azure AD / API key / IP allowlist).
+/// Protected by Azure AD authentication - requires Admin role.
 /// </summary>
 [Route("api/admin")]
 [ApiController]
+[Authorize(Policy = "RequireAdmin")]
 public class AdminMaintenanceController(DeletedEntitiesPurger purger, IConfiguration configuration) : ControllerBase
 {
     private readonly DeletedEntitiesPurger _purger = purger;

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using FOMSApp.API.Data;
@@ -18,6 +19,7 @@ public class PhotosController(AppDbContext context, IStorageService storageServi
 
     // GET: api/photos/vault/{vaultId} - Gets all photos for a specific vault.
     [HttpGet("vault/{vaultId}")]
+    [AllowAnonymous]
     public async Task<ActionResult<IEnumerable<Photo>>> GetPhotosForVault(int vaultId)
     {
         return await _context.Photos
@@ -28,6 +30,7 @@ public class PhotosController(AppDbContext context, IStorageService storageServi
 
     // GET: api/photos/midpoint/{midpointId} - Gets all photos for a specific midpoint.
     [HttpGet("midpoint/{midpointId}")]
+    [AllowAnonymous]
     public async Task<ActionResult<IEnumerable<Photo>>> GetPhotosForMidpoint(int midpointId)
     {
         return await _context.Photos
@@ -38,6 +41,7 @@ public class PhotosController(AppDbContext context, IStorageService storageServi
 
     // GET: api/photos/file/{fileName} - Serves a photo file from storage.
     [HttpGet("file/{fileName}")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetPhotoFile(string fileName)
     {
         // Security: Prevent path traversal attacks
@@ -69,6 +73,7 @@ public class PhotosController(AppDbContext context, IStorageService storageServi
 
     // POST: api/photos - Uploads a photo file and creates a database record.
     [HttpPost]
+    [Authorize(Policy = "RequireEditor")]
     public async Task<ActionResult<Photo>> UploadPhoto([FromForm] PhotoUploadDto upload)
     {
         if (upload.File == null || upload.File.Length == 0)
@@ -131,6 +136,7 @@ public class PhotosController(AppDbContext context, IStorageService storageServi
 
     // GET: api/photos/vault/{vaultId}/download - Downloads all photos for a vault as a ZIP file.
     [HttpGet("vault/{vaultId}/download")]
+    [AllowAnonymous]
     public async Task<IActionResult> DownloadVaultPhotos(int vaultId)
     {
         var photos = await _context.Photos
@@ -167,6 +173,7 @@ public class PhotosController(AppDbContext context, IStorageService storageServi
 
     // GET: api/photos/midpoint/{midpointId}/download - Downloads all photos for a midpoint as a ZIP file.
     [HttpGet("midpoint/{midpointId}/download")]
+    [AllowAnonymous]
     public async Task<IActionResult> DownloadMidpointPhotos(int midpointId)
     {
         var photos = await _context.Photos
@@ -203,6 +210,7 @@ public class PhotosController(AppDbContext context, IStorageService storageServi
 
     // GET: api/photos/batch-download - Downloads photos for multiple vaults/midpoints as a single ZIP file.
     [HttpGet("batch-download")]
+    [AllowAnonymous]
     public async Task<IActionResult> BatchDownloadPhotos([FromQuery] string? vaultIds, [FromQuery] string? midpointIds)
     {
         var vaultIdList = ParseIds(vaultIds);
@@ -252,6 +260,7 @@ public class PhotosController(AppDbContext context, IStorageService storageServi
 
     // DELETE: api/photos/{id} - Deletes a photo from the database and file system.
     [HttpDelete("{id}")]
+    [Authorize(Policy = "RequireAdmin")]
     public async Task<IActionResult> DeletePhoto(int id)
     {
         var photo = await _context.Photos.FindAsync(id);

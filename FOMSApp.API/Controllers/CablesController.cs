@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using FOMSApp.API.Data;
@@ -15,6 +16,7 @@ public class CablesController(AppDbContext context, ILogger<CablesController> lo
 
     // GET: api/cables - Gets all cable routes.
     [HttpGet]
+    [AllowAnonymous]
     public async Task<ActionResult<IEnumerable<Cable>>> GetCables()
     {
         return await _context.Cables
@@ -25,6 +27,7 @@ public class CablesController(AppDbContext context, ILogger<CablesController> lo
 
     // GET: api/cables/{id} - Gets a single cable by ID.
     [HttpGet("{id}")]
+    [AllowAnonymous]
     public async Task<ActionResult<Cable>> GetCable(int id)
     {
         var cable = await _context.Cables.FindAsync(id);
@@ -37,6 +40,7 @@ public class CablesController(AppDbContext context, ILogger<CablesController> lo
 
     // POST: api/cables - Creates a new cable route.
     [HttpPost]
+    [Authorize(Policy = "RequireEditor")]
     public async Task<ActionResult<Cable>> PostCable(Cable cable)
     {
         if (!ModelState.IsValid)
@@ -61,6 +65,7 @@ public class CablesController(AppDbContext context, ILogger<CablesController> lo
 
     // PUT: api/cables/{id} - Updates an existing cable route.
     [HttpPut("{id}")]
+    [Authorize(Policy = "RequireEditor")]
     public async Task<IActionResult> PutCable(int id, Cable cable)
     {
         if (id != cable.Id)
@@ -97,6 +102,7 @@ public class CablesController(AppDbContext context, ILogger<CablesController> lo
 
     // DELETE: api/cables/{id} - Deletes a cable route.
     [HttpDelete("{id}")]
+    [Authorize(Policy = "RequireAdmin")]
     public async Task<IActionResult> DeleteCable(int id)
     {
         var cable = await _context.Cables.FindAsync(id);

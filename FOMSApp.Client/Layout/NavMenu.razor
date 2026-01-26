@@ -20,6 +20,28 @@
             </a>
         </div>
     </nav>
+    
+    <div class="nav-item px-3 mt-3 border-top pt-3">
+        <AuthorizeView>
+            <Authorized>
+                <div class="text-light small mb-2">
+                    @context.User.Identity?.Name
+                </div>
+                <div class="nav-item">
+                    <a class="nav-link text-warning" href="authentication/logout">
+                        <span class="bi bi-box-arrow-right" aria-hidden="true"></span> Logout
+                    </a>
+                </div>
+            </Authorized>
+            <NotAuthorized>
+                <div class="nav-item">
+                    <a class="nav-link text-success" href="authentication/login">
+                        <span class="bi bi-box-arrow-in-right" aria-hidden="true"></span> Login
+                    </a>
+                </div>
+            </NotAuthorized>
+        </AuthorizeView>
+    </div>
 </div>
 
 @code {

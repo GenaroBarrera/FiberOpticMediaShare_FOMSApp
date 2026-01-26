@@ -52,7 +52,11 @@ else
                         }
                     </p>
                 </div>
-                <button type="button" class="btn btn-primary" @onclick="StartEditing">Edit Midpoint</button>
+                <AuthorizeView Roles="Admin,Editor">
+                    <Authorized>
+                        <button type="button" class="btn btn-primary" @onclick="StartEditing">Edit Midpoint</button>
+                    </Authorized>
+                </AuthorizeView>
             }
             else if (editModel != null)
             {
@@ -136,42 +140,46 @@ else
         </div>
         <div class="card-body">
 
-            <div class="mb-3">
-                <label>Select photos to upload (you can select multiple):</label>
-                <div class="input-group">
-                    <InputFile OnChange="@OnFilesSelected" class="form-control" accept=".jpg,.jpeg,.png" multiple @ref="fileInput" />
-                </div>
-                @if (selectedFiles != null && selectedFiles.Count > 0)
-                {
-                    <div class="mt-2">
-                        <p class="mb-2">
-                            <strong>Selected files:</strong> @selectedFiles.Count file(s)
-                            <span class="text-muted">(@(selectedFiles.Sum(f => f.Size) / 1024) KB total)</span>
-                        </p>
-                        <ul class="list-group list-group-flush mb-2" style="max-height: 150px; overflow-y: auto;">
-                            @foreach (var file in selectedFiles)
-                            {
-                                <li class="list-group-item py-1 px-2 d-flex justify-content-between align-items-center">
-                                    <span>@file.Name</span>
-                                    <span class="badge bg-secondary">@(file.Size / 1024) KB</span>
-                                </li>
-                            }
-                        </ul>
-                        <button type="button" class="btn btn-primary" @onclick="UploadSelectedPhotos" disabled="@(isUploading)">
-                            @if (isUploading)
-                            {
-                                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                                <text>Uploading @uploadProgress of @selectedFiles.Count...</text>
-                            }
-                            else
-                            {
-                                <text>Upload @selectedFiles.Count Photo(s)</text>
-                            }
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary ms-2" @onclick="ClearSelectedFiles" disabled="@isUploading">Cancel</button>
+            <AuthorizeView Roles="Admin,Editor">
+                <Authorized>
+                    <div class="mb-3">
+                        <label>Select photos to upload (you can select multiple):</label>
+                        <div class="input-group">
+                            <InputFile OnChange="@OnFilesSelected" class="form-control" accept=".jpg,.jpeg,.png" multiple @ref="fileInput" />
+                        </div>
+                        @if (selectedFiles != null && selectedFiles.Count > 0)
+                        {
+                            <div class="mt-2">
+                                <p class="mb-2">
+                                    <strong>Selected files:</strong> @selectedFiles.Count file(s)
+                                    <span class="text-muted">(@(selectedFiles.Sum(f => f.Size) / 1024) KB total)</span>
+                                </p>
+                                <ul class="list-group list-group-flush mb-2" style="max-height: 150px; overflow-y: auto;">
+                                    @foreach (var file in selectedFiles)
+                                    {
+                                        <li class="list-group-item py-1 px-2 d-flex justify-content-between align-items-center">
+                                            <span>@file.Name</span>
+                                            <span class="badge bg-secondary">@(file.Size / 1024) KB</span>
+                                        </li>
+                                    }
+                                </ul>
+                                <button type="button" class="btn btn-primary" @onclick="UploadSelectedPhotos" disabled="@(isUploading)">
+                                    @if (isUploading)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                        <text>Uploading @uploadProgress of @selectedFiles.Count...</text>
+                                    }
+                                    else
+                                    {
+                                        <text>Upload @selectedFiles.Count Photo(s)</text>
+                                    }
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary ms-2" @onclick="ClearSelectedFiles" disabled="@isUploading">Cancel</button>
+                            </div>
+                        }
                     </div>
-                }
-            </div>
+                </Authorized>
+            </AuthorizeView>
 
             <hr />
 
@@ -195,11 +203,15 @@ else
                                     @onclick="() => OpenPhoto(photo.FileName)">
                                 <div class="card-body">
                                     <small class="text-muted">Uploaded: @photo.UploadedAt.ToShortDateString()</small>
-                                    <div class="mt-2">
-                                        <button type="button" class="btn btn-sm btn-danger" @onclick="() => DeletePhoto(photo.Id)" @onclick:stopPropagation="true">
-                                            Delete Photo
-                                        </button>
-                                    </div>
+                                    <AuthorizeView Roles="Admin">
+                                        <Authorized>
+                                            <div class="mt-2">
+                                                <button type="button" class="btn btn-sm btn-danger" @onclick="() => DeletePhoto(photo.Id)" @onclick:stopPropagation="true">
+                                                    Delete Photo
+                                                </button>
+                                            </div>
+                                        </Authorized>
+                                    </AuthorizeView>
                                 </div>
                             </div>
                         </div>

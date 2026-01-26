@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using FOMSApp.API.Data;
@@ -16,6 +17,7 @@ public class VaultsController(AppDbContext context, IWebHostEnvironment env, ILo
 
     // GET: api/vaults - Gets all vaults with their associated photos.
     [HttpGet]
+    [AllowAnonymous]
     public async Task<ActionResult<IEnumerable<Vault>>> GetVaults()
     {
         return await _context.Vaults
@@ -27,6 +29,7 @@ public class VaultsController(AppDbContext context, IWebHostEnvironment env, ILo
 
     // GET: api/vaults/{id} - Gets a single vault by ID.
     [HttpGet("{id}")]
+    [AllowAnonymous]
     public async Task<ActionResult<Vault>> GetVault(int id)
     {
         var vault = await _context.Vaults.FindAsync(id);
@@ -39,6 +42,7 @@ public class VaultsController(AppDbContext context, IWebHostEnvironment env, ILo
 
     // POST: api/vaults - Creates a new vault.
     [HttpPost]
+    [Authorize(Policy = "RequireEditor")]
     public async Task<ActionResult<Vault>> PostVault(Vault vault)
     {
         if (!ModelState.IsValid)
@@ -63,6 +67,7 @@ public class VaultsController(AppDbContext context, IWebHostEnvironment env, ILo
 
     // PUT: api/vaults/{id} - Updates an existing vault.
     [HttpPut("{id}")]
+    [Authorize(Policy = "RequireEditor")]
     public async Task<IActionResult> PutVault(int id, Vault vault)
     {
         if (id != vault.Id)
@@ -100,6 +105,7 @@ public class VaultsController(AppDbContext context, IWebHostEnvironment env, ILo
 
     // DELETE: api/vaults/{id} - Deletes a vault and its associated photos.
     [HttpDelete("{id}")]
+    [Authorize(Policy = "RequireAdmin")]
     public async Task<IActionResult> DeleteVault(int id)
     {
         var vault = await _context.Vaults

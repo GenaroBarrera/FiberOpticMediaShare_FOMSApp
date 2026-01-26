@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using FOMSApp.API.Data;
@@ -16,6 +17,7 @@ public class MidpointsController(AppDbContext context, IWebHostEnvironment env, 
 
     // GET: api/midpoints - Gets all midpoints.
     [HttpGet]
+    [AllowAnonymous]
     public async Task<ActionResult<IEnumerable<Midpoint>>> GetMidpoints()
     {
         return await _context.Midpoints
@@ -26,6 +28,7 @@ public class MidpointsController(AppDbContext context, IWebHostEnvironment env, 
 
     // GET: api/midpoints/{id} - Gets a single midpoint by ID.
     [HttpGet("{id}")]
+    [AllowAnonymous]
     public async Task<ActionResult<Midpoint>> GetMidpoint(int id)
     {
         var midpoint = await _context.Midpoints.FindAsync(id);
@@ -38,6 +41,7 @@ public class MidpointsController(AppDbContext context, IWebHostEnvironment env, 
 
     // POST: api/midpoints - Creates a new midpoint.
     [HttpPost]
+    [Authorize(Policy = "RequireEditor")]
     public async Task<ActionResult<Midpoint>> PostMidpoint(Midpoint midpoint)
     {
         if (!ModelState.IsValid)
@@ -62,6 +66,7 @@ public class MidpointsController(AppDbContext context, IWebHostEnvironment env, 
 
     // PUT: api/midpoints/{id} - Updates an existing midpoint.
     [HttpPut("{id}")]
+    [Authorize(Policy = "RequireEditor")]
     public async Task<IActionResult> PutMidpoint(int id, Midpoint midpoint)
     {
         if (id != midpoint.Id)
@@ -99,6 +104,7 @@ public class MidpointsController(AppDbContext context, IWebHostEnvironment env, 
 
     // DELETE: api/midpoints/{id} - Deletes a midpoint and its associated photos.
     [HttpDelete("{id}")]
+    [Authorize(Policy = "RequireAdmin")]
     public async Task<IActionResult> DeleteMidpoint(int id)
     {
         var midpoint = await _context.Midpoints
