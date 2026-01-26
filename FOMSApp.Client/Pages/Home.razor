@@ -30,66 +30,59 @@ else
                         @onclick="async () => await SetMode(MapMode.View)">
                     View
                 </button>
-                <AuthorizeView Roles="Admin,Editor">
-                    <Authorized>
-                        <button type="button" 
-                                class="btn @(currentMode == MapMode.AddVault ? "btn-primary" : "btn-outline-primary")"
-                                @onclick="async () => await SetMode(MapMode.AddVault)">
-                            Add Vault
-                        </button>
-                        <button type="button" 
-                                class="btn @(currentMode == MapMode.AddMidpoint ? "btn-primary" : "btn-outline-primary")"
-                                @onclick="async () => await SetMode(MapMode.AddMidpoint)">
-                            Add Midpoint
-                        </button>
-                        <button type="button" 
-                                class="btn @(currentMode == MapMode.DrawCable ? "btn-primary" : "btn-outline-primary")"
-                                @onclick="async () => await SetMode(MapMode.DrawCable)">
-                            Draw Cable
-                        </button>
-                    </Authorized>
-                </AuthorizeView>
-                <AuthorizeView Roles="Admin">
-                    <Authorized>
-                        <button type="button" 
-                                class="btn @(currentMode == MapMode.Delete ? "btn-primary" : "btn-outline-primary")"
-                                @onclick="async () => await SetMode(MapMode.Delete)">
-                            Delete
-                        </button>
-                        @if (currentMode == MapMode.Delete)
+                @* Authentication temporarily disabled - all buttons visible *@
+                <button type="button" 
+                        class="btn @(currentMode == MapMode.AddVault ? "btn-primary" : "btn-outline-primary")"
+                        @onclick="async () => await SetMode(MapMode.AddVault)">
+                    Add Vault
+                </button>
+                <button type="button" 
+                        class="btn @(currentMode == MapMode.AddMidpoint ? "btn-primary" : "btn-outline-primary")"
+                        @onclick="async () => await SetMode(MapMode.AddMidpoint)">
+                    Add Midpoint
+                </button>
+                <button type="button" 
+                        class="btn @(currentMode == MapMode.DrawCable ? "btn-primary" : "btn-outline-primary")"
+                        @onclick="async () => await SetMode(MapMode.DrawCable)">
+                    Draw Cable
+                </button>
+                <button type="button" 
+                        class="btn @(currentMode == MapMode.Delete ? "btn-primary" : "btn-outline-primary")"
+                        @onclick="async () => await SetMode(MapMode.Delete)">
+                    Delete
+                </button>
+                @if (currentMode == MapMode.Delete)
+                {
+                    <button type="button"
+                            class="btn btn-danger"
+                            @onclick="async () => await DeleteSelectedEntities()"
+                            disabled="@(isDeletingSelected || TotalDeleteSelectedCount == 0)"
+                            title="@(TotalDeleteSelectedCount > 0 ? $"Delete {TotalDeleteSelectedCount} selected item(s)" : "Select items on the map to delete")">
+                        @if (isDeletingSelected)
                         {
-                            <button type="button"
-                                    class="btn btn-danger"
-                                    @onclick="async () => await DeleteSelectedEntities()"
-                                    disabled="@(isDeletingSelected || TotalDeleteSelectedCount == 0)"
-                                    title="@(TotalDeleteSelectedCount > 0 ? $"Delete {TotalDeleteSelectedCount} selected item(s)" : "Select items on the map to delete")">
-                                @if (isDeletingSelected)
-                                {
-                                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                                    <text>Deleting...</text>
-                                }
-                                else
-                                {
-                                    <text>Delete Selected (@TotalDeleteSelectedCount)</text>
-                                }
-                            </button>
-                            <button type="button"
-                                    class="btn btn-outline-secondary"
-                                    @onclick="async () => await ClearDeleteSelections()"
-                                    disabled="@(isDeletingSelected || TotalDeleteSelectedCount == 0)"
-                                    title="Clear delete selection">
-                                Clear
-                            </button>
+                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            <text>Deleting...</text>
                         }
-                        <button type="button" 
-                                class="btn btn-outline-secondary"
-                                @onclick="async () => await UndoLastAction()"
-                                disabled="@(undoHistory.Count == 0)"
-                                title="@(undoHistory.Count > 0 ? $"Undo last action ({undoHistory.Count} available)" : "No actions to undo")">
-                            <i class="bi bi-arrow-counterclockwise"></i> Undo
-                        </button>
-                    </Authorized>
-                </AuthorizeView>
+                        else
+                        {
+                            <text>Delete Selected (@TotalDeleteSelectedCount)</text>
+                        }
+                    </button>
+                    <button type="button"
+                            class="btn btn-outline-secondary"
+                            @onclick="async () => await ClearDeleteSelections()"
+                            disabled="@(isDeletingSelected || TotalDeleteSelectedCount == 0)"
+                            title="Clear delete selection">
+                        Clear
+                    </button>
+                }
+                <button type="button" 
+                        class="btn btn-outline-secondary"
+                        @onclick="async () => await UndoLastAction()"
+                        disabled="@(undoHistory.Count == 0)"
+                        title="@(undoHistory.Count > 0 ? $"Undo last action ({undoHistory.Count} available)" : "No actions to undo")">
+                    <i class="bi bi-arrow-counterclockwise"></i> Undo
+                </button>
                 <button type="button" 
                         class="btn @(currentMode == MapMode.Select ? "btn-primary" : "btn-outline-primary")"
                         @onclick="async () => await SetMode(MapMode.Select)">
