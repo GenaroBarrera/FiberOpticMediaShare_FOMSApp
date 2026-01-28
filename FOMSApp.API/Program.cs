@@ -1,9 +1,14 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using FOMSApp.API.Data;
 using FOMSApp.API.Services;
 using FOMSApp.API.Configuration;
 using NetTopologySuite.IO.Converters;
 using System.Text.Json.Serialization;
+using System.Security.Claims;
 using Azure.Storage.Blobs;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -27,8 +32,105 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(optio
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// TODO: Re-enable authentication later
-// Authentication is temporarily disabled to get core functionality working
+// Configure cookie-based Azure AD authentication (BFF pattern)
+var azureAdSection = builder.Configuration.GetSection("AzureAd");
+var clientUrl = builder.Configuration["ClientUrl"] ?? "https://fomsapp-client-dev-h8gpfta0hybueaeu.centralus-01.azurewebsites.net";
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = OpenIdConnectDefaults.AuthenticationScheme;
+})
+.AddCookie(options =>
+{
+    options.Cookie.Name = "FOMSApp.Auth";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.SameSite = SameSiteMode.None; // Required for cross-origin requests
+    options.ExpireTimeSpan = TimeSpan.FromHours(8);
+    options.SlidingExpiration = true;
+    
+    // Return 401 for API calls instead of redirecting
+    options.Events.OnRedirectToLogin = context =>
+    {
+        context.Response.StatusCode = 401;
+        return Task.CompletedTask;
+    };
+    options.Events.OnRedirectToAccessDenied = context =>
+    {
+        context.Response.StatusCode = 403;
+        return Task.CompletedTask;
+    };
+})
+.AddOpenIdConnect(options =>
+{
+    options.Authority = $"{azureAdSection["Instance"]}{azureAdSection["TenantId"]}/v2.0";
+    options.ClientId = azureAdSection["ClientId"];
+    options.ClientSecret = azureAdSection["ClientSecret"];
+    options.ResponseType = OpenIdConnectResponseType.Code;
+    options.SaveTokens = true;
+    options.GetClaimsFromUserInfoEndpoint = true;
+    options.Scope.Add("openid");
+    options.Scope.Add("profile");
+    options.Scope.Add("email");
+    
+    // Map the roles claim from Azure AD
+    options.TokenValidationParameters.RoleClaimType = "roles";
+    
+    options.Events.OnRedirectToIdentityProvider = context =>
+    {
+        // Store the return URL for after login
+        if (context.Properties.RedirectUri != null)
+        {
+            context.Properties.Items["returnUrl"] = context.Properties.RedirectUri;
+        }
+        return Task.CompletedTask;
+    };
+    
+    options.Events.OnTokenValidated = context =>
+    {
+        // Log successful authentication
+        var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+        var userName = context.Principal?.Identity?.Name ?? "Unknown";
+        var roles = context.Principal?.Claims.Where(c => c.Type == "roles").Select(c => c.Value).ToList() ?? [];
+        logger.LogInformation("User {User} authenticated with roles: {Roles}", userName, string.Join(", ", roles));
+        
+        // Transform Azure AD "roles" claims to standard ClaimTypes.Role for authorization policies
+        if (context.Principal?.Identity is ClaimsIdentity identity)
+        {
+            var existingRoleClaims = identity.Claims.Where(c => c.Type == "roles").ToList();
+            foreach (var roleClaim in existingRoleClaims)
+            {
+                // Add as standard role claim type so RequireRole() works
+                identity.AddClaim(new Claim(ClaimTypes.Role, roleClaim.Value));
+            }
+        }
+        
+        return Task.CompletedTask;
+    };
+});
+
+// Register claims transformation to map Azure AD roles to standard role claims
+builder.Services.AddTransient<IClaimsTransformation, RoleClaimsTransformation>();
+
+// Configure authorization policies - check both "roles" claim (Azure AD) and standard Role claim
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy("RequireEditor", policy => 
+        policy.RequireAssertion(context =>
+        {
+            var roles = context.User.Claims
+                .Where(c => c.Type == "roles" || c.Type == ClaimTypes.Role)
+                .Select(c => c.Value);
+            return roles.Any(r => r == "Admin" || r == "Editor");
+        }))
+    .AddPolicy("RequireAdmin", policy => 
+        policy.RequireAssertion(context =>
+        {
+            var roles = context.User.Claims
+                .Where(c => c.Type == "roles" || c.Type == ClaimTypes.Role)
+                .Select(c => c.Value);
+            return roles.Any(r => r == "Admin");
+        }));
 
 // Configure database
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
@@ -73,44 +175,26 @@ else
     builder.Services.AddSingleton<IStorageService, LocalFileStorageService>();
 }
 
-// Configure CORS
+// Configure CORS - must allow credentials for cookie auth
 builder.Services.AddCors(options =>
 {
-    // Development: Allow all origins for local development
-    options.AddPolicy("AllowAll", policy =>
+    options.AddPolicy("AllowClient", policy =>
     {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
-    });
-    
-    // Production: Use specific origins (configure in appsettings.json)
-    options.AddPolicy("Production", policy =>
-    {
-        var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() 
-            ?? Array.Empty<string>();
-        
-        if (allowedOrigins.Length > 0)
-        {
-            policy.WithOrigins(allowedOrigins)
-                  .AllowAnyMethod()
-                  .AllowAnyHeader()
-                  .AllowCredentials();
-        }
+        policy.WithOrigins(
+                clientUrl,
+                "https://localhost:7166", // Local client HTTPS
+                "http://localhost:5173"   // Local client HTTP
+            )
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials(); // Required for cookies
     });
 });
 
 var app = builder.Build();
 
 // CORS must be early in the pipeline, before other middleware
-if (app.Environment.IsDevelopment())
-{
-    app.UseCors("AllowAll");
-}
-else
-{
-    app.UseCors("Production");
-}
+app.UseCors("AllowClient");
 
 // Global exception handler to ensure proper error responses
 app.Use(async (context, next) =>
@@ -144,9 +228,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseStaticFiles();
-// TODO: Re-enable authentication later
-// app.UseAuthentication();
-// app.UseAuthorization();
+app.UseAuthentication();
+app.UseAuthorization();
 
 // Root endpoint - redirect to Swagger in development, or return API info
 app.MapGet("/", () => 

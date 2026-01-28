@@ -1,3 +1,7 @@
+@using FOMSApp.Client.Services
+@inject AuthService AuthService
+@inject NavigationManager NavigationManager
+
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
         <a class="navbar-brand" href="">FOMSApp.Client</a>
@@ -21,13 +25,64 @@
         </div>
     </nav>
     
-    @* Authentication temporarily disabled - will be re-enabled later *@
+    <div class="nav-item px-3 mt-3 border-top pt-3">
+        @if (isLoading)
+        {
+            <div class="text-light small">Loading...</div>
+        }
+        else if (user?.IsAuthenticated == true)
+        {
+            <div class="text-light small mb-2">
+                <span class="bi bi-person-circle me-1"></span>
+                @user.Name
+                @if (user.IsAdmin)
+                {
+                    <span class="badge bg-danger ms-1">Admin</span>
+                }
+                else if (user.IsEditor)
+                {
+                    <span class="badge bg-warning text-dark ms-1">Editor</span>
+                }
+            </div>
+            <div class="nav-item">
+                <a class="nav-link text-warning" href="@AuthService.GetLogoutUrl(NavigationManager.Uri)">
+                    <span class="bi bi-box-arrow-right" aria-hidden="true"></span> Logout
+                </a>
+            </div>
+        }
+        else
+        {
+            <div class="nav-item">
+                <a class="nav-link text-success" href="@AuthService.GetLoginUrl(NavigationManager.Uri)">
+                    <span class="bi bi-box-arrow-in-right" aria-hidden="true"></span> Login
+                </a>
+            </div>
+        }
+    </div>
 </div>
 
 @code {
     private bool collapseNavMenu = true;
+    private bool isLoading = true;
+    private UserInfo? user;
 
     private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            user = await AuthService.GetCurrentUserAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading user: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
 
     private void ToggleNavMenu()
     {

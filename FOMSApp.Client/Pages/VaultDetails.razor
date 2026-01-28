@@ -1,11 +1,13 @@
 @page "/vault/{Id:int}"
 @using FOMSApp.Shared.Models
+@using FOMSApp.Client.Services
 @using System.Text.Json
 @using System.Net.Http.Headers
 @using NetTopologySuite.IO.Converters
 @using Microsoft.JSInterop
 @inject HttpClient Http
 @inject IJSRuntime JS
+@inject AuthService AuthService
 
 <PageTitle>Vault Details</PageTitle>
 
@@ -56,8 +58,10 @@ else
                         }
                     </p>
                 </div>
-                @* Authentication temporarily disabled *@
-                <button type="button" class="btn btn-primary" @onclick="StartEditing">Edit Vault</button>
+                @if (currentUser?.IsEditor == true)
+                {
+                    <button type="button" class="btn btn-primary" @onclick="StartEditing">Edit Vault</button>
+                }
             }
             else if (editModel != null)
             {
@@ -142,43 +146,45 @@ else
         </div>
         <div class="card-body">
 
-            @* Authentication temporarily disabled - photo upload visible *@
-            <div class="mb-3">
-                <label>Select photos to upload (you can select multiple):</label>
-                <div class="input-group">
-                    <InputFile OnChange="@OnFilesSelected" class="form-control" accept=".jpg,.jpeg,.png" multiple @ref="fileInput" />
-                </div>
-                @if (selectedFiles != null && selectedFiles.Count > 0)
-                {
-                    <div class="mt-2">
-                        <p class="mb-2">
-                            <strong>Selected files:</strong> @selectedFiles.Count file(s)
-                            <span class="text-muted">(@(selectedFiles.Sum(f => f.Size) / 1024) KB total)</span>
-                        </p>
-                        <ul class="list-group list-group-flush mb-2" style="max-height: 150px; overflow-y: auto;">
-                            @foreach (var file in selectedFiles)
-                            {
-                                <li class="list-group-item py-1 px-2 d-flex justify-content-between align-items-center">
-                                    <span>@file.Name</span>
-                                    <span class="badge bg-secondary">@(file.Size / 1024) KB</span>
-                                </li>
-                            }
-                        </ul>
-                        <button type="button" class="btn btn-primary" @onclick="UploadSelectedPhotos" disabled="@(isUploading)">
-                            @if (isUploading)
-                            {
-                                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                                <text>Uploading @uploadProgress of @selectedFiles.Count...</text>
-                            }
-                            else
-                            {
-                                <text>Upload @selectedFiles.Count Photo(s)</text>
-                            }
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary ms-2" @onclick="ClearSelectedFiles" disabled="@isUploading">Cancel</button>
+            @if (currentUser?.IsEditor == true)
+            {
+                <div class="mb-3">
+                    <label>Select photos to upload (you can select multiple):</label>
+                    <div class="input-group">
+                        <InputFile OnChange="@OnFilesSelected" class="form-control" accept=".jpg,.jpeg,.png" multiple @ref="fileInput" />
                     </div>
-                }
-            </div>
+                    @if (selectedFiles != null && selectedFiles.Count > 0)
+                    {
+                        <div class="mt-2">
+                            <p class="mb-2">
+                                <strong>Selected files:</strong> @selectedFiles.Count file(s)
+                                <span class="text-muted">(@(selectedFiles.Sum(f => f.Size) / 1024) KB total)</span>
+                            </p>
+                            <ul class="list-group list-group-flush mb-2" style="max-height: 150px; overflow-y: auto;">
+                                @foreach (var file in selectedFiles)
+                                {
+                                    <li class="list-group-item py-1 px-2 d-flex justify-content-between align-items-center">
+                                        <span>@file.Name</span>
+                                        <span class="badge bg-secondary">@(file.Size / 1024) KB</span>
+                                    </li>
+                                }
+                            </ul>
+                            <button type="button" class="btn btn-primary" @onclick="UploadSelectedPhotos" disabled="@(isUploading)">
+                                @if (isUploading)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                    <text>Uploading @uploadProgress of @selectedFiles.Count...</text>
+                                }
+                                else
+                                {
+                                    <text>Upload @selectedFiles.Count Photo(s)</text>
+                                }
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary ms-2" @onclick="ClearSelectedFiles" disabled="@isUploading">Cancel</button>
+                        </div>
+                    }
+                </div>
+            }
 
             <hr />
 
@@ -202,12 +208,14 @@ else
                                     @onclick="() => OpenPhoto(photo.FileName)">
                                 <div class="card-body">
                                     <small class="text-muted">Uploaded: @photo.UploadedAt.ToShortDateString()</small>
-                                    @* Authentication temporarily disabled *@
-                                    <div class="mt-2">
-                                        <button type="button" class="btn btn-sm btn-danger" @onclick="() => DeletePhoto(photo.Id)" @onclick:stopPropagation="true">
-                                            Delete Photo
-                                        </button>
-                                    </div>
+                                    @if (currentUser?.IsAdmin == true)
+                                    {
+                                        <div class="mt-2">
+                                            <button type="button" class="btn btn-sm btn-danger" @onclick="() => DeletePhoto(photo.Id)" @onclick:stopPropagation="true">
+                                                Delete Photo
+                                            </button>
+                                        </div>
+                                    }
                                 </div>
                             </div>
                         </div>
@@ -245,6 +253,9 @@ else
     private int uploadProgress = 0;
     private bool isUploading = false;
     private bool isDownloading = false;
+    
+    // Current user info for role-based UI
+    private UserInfo? currentUser;
 
     private void OpenPhoto(string fileName) => selectedPhotoUrl = $"{Http.BaseAddress}api/photos/file/{Uri.EscapeDataString(fileName)}";
     private void ClosePhoto() => selectedPhotoUrl = null;
@@ -334,6 +345,13 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        // Load user info in background for role-based UI
+        _ = Task.Run(async () => 
+        {
+            currentUser = await AuthService.GetCurrentUserAsync();
+            await InvokeAsync(StateHasChanged);
+        });
+        
         await LoadVault();
         await LoadPhotos();
     }
